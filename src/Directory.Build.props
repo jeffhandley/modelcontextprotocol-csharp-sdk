@@ -2,8 +2,8 @@
   <Import Project="..\Directory.Build.props" />
 
   <PropertyGroup>
-    <PackageProjectUrl>https://github.com/modelcontextprotocol/csharp-sdk</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/modelcontextprotocol/csharp-sdk</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/jeffhandley/modelcontextprotocol-csharp-sdk</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/jeffhandley-modelcontextprotocol-csharp-sdk</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
     <PackageTags>ModelContextProtocol;mcp;ai;llm</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
