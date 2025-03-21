@@ -43,6 +43,13 @@ jobs:
     - name: Pack
       run: dotnet pack --configuration Release --output "${{ github.workspace }}/artifacts/packages"
 
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      if: ${{ !cancelled() }}
+      with:
+        name: build-artifacts
+        path: ${{ github.workspace }}/artifacts
+
   publish:
     name: Publish Package
     needs: build
