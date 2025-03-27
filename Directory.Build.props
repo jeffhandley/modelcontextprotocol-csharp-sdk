@@ -6,12 +6,32 @@
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
     <PackageVersion>0.1.0-preview</PackageVersion>
-    <Authors>Microsoft</Authors>
-    <Copyright>© Microsoft Corporation. All rights reserved.</Copyright>
-    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))</RepoRoot>
-    <VSTestLogger>trx%3bLogFileName=$(MSBuildProjectName).$(TargetFramework).$(OS).trx</VSTestLogger>
-    <VSTestResultsDirectory>$(RepoRoot)/artifacts/TestResults</VSTestResultsDirectory>
+    <Authors>ModelContextProtocolOfficial</Authors>
+    <Copyright>© Anthropic and Contributors.</Copyright>
     <WarnOnPackingNonPackableProject>false</WarnOnPackingNonPackableProject>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)'))</RepoRoot>
+    <ArtifactsDir Condition="'$(ArtifactsDir)' == ''">$([MSBuild]::NormalizeDirectory('$(RepoRoot)', 'artifacts'))</ArtifactsDir>
+    <ArtifactsObjDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'obj'))</ArtifactsObjDir>
+    <ArtifactsBinDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'bin'))</ArtifactsBinDir>
+    <ArtifactsTestResultsDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'TestResults', '$(Configuration)'))</ArtifactsTestResultsDir>
+    <ArtifactsPackagesDir>$([MSBuild]::NormalizeDirectory('$(ArtifactsDir)', 'packages', '$(Configuration)'))</ArtifactsPackagesDir>
+    <OutDirName>$(MSBuildProjectName)</OutDirName>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <BaseIntermediateOutputPath>$([System.IO.Path]::GetFullPath('$(ArtifactsObjDir)$(OutDirName)\'))</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
+
+    <BaseOutputPath>$([System.IO.Path]::GetFullPath('$(ArtifactsBinDir)$(OutDirName)\'))</BaseOutputPath>
+    <OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
+
+    <VSTestLogger>trx%3bLogFileName=$(MSBuildProjectName).$(TargetFramework).$(OS).trx</VSTestLogger>
+    <VSTestResultsDirectory>$(ArtifactsTestResultsDir)</VSTestResultsDirectory>
+
+    <PackageOutputPath>$(ArtifactsPackagesDir)</PackageOutputPath>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">

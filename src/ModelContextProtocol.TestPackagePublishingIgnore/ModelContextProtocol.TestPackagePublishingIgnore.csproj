@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;netstandard2.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>true</IsPackable>
+    <PackageId>ModelContextProtocol.TestPackagePublishingIgnore</PackageId>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Description>Test package for verifying NuGet.org publishing into the ModelContextProtocol ID prefix. Please ignore.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>
