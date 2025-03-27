@@ -81,7 +81,7 @@ jobs:
 
   publish:
     name: Publish Package
-    needs: build
+    needs: build-test-pack
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
