@@ -4,7 +4,7 @@
     <TargetFrameworks>net9.0;net8.0;netstandard2.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
-    <PackageId>ModelContextProtocol</PackageId>
+    <PackageId>JeffHandley.ModelContextProtocol.Test</PackageId>
     <Description>.NET SDK for the Model Context Protocol (MCP)</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <LangVersion>preview</LangVersion>
