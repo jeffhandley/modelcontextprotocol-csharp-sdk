@@ -3,6 +3,9 @@ name: Code Coverage
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   publish-coverage:
     runs-on: ubuntu-latest
@@ -58,13 +61,6 @@ jobs:
           name: coverage-markdown
           path: ${{ github.workspace }}/code-coverage-results.md
           retention-days: 7
-
-      - name: Add Coverage PR Comment
-        uses: marocchino/sticky-pull-request-comment@v2
-        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-        with:
-          recreate: true
-          path: ${{ github.workspace }}/code-coverage-results.md
 
       - name: Coverage on step summary
         if: always()
