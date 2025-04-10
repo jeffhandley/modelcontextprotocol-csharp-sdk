@@ -30,6 +30,10 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
   build-package:
     runs-on: windows-latest
@@ -67,10 +71,6 @@ jobs:
     needs: build-package
 
     runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-      packages: write
 
     steps:
       - uses: actions/checkout@v4
