@@ -37,9 +37,6 @@ jobs:
     env:
       version_suffix_args: ${{ github.event_name != 'release' && format('--version-suffix "{0}"', inputs.version_suffix_override || format('ci.{0}', github.run_number)) || '' }}
 
-    permissions:
-      contents: read
-
     steps:
       - uses: actions/checkout@v4
 
