@@ -58,7 +58,7 @@ jobs:
           name: build-artifacts
           path: ${{ github.workspace }}/artifacts
 
-  publish-github-package:
+  publish-github:
     needs: build-package
     runs-on: ubuntu-latest
     permissions:
@@ -89,7 +89,7 @@ jobs:
             --api-key ${{ secrets.GITHUB_TOKEN }}
             --skip-duplicate
 
-  publish-release-package:
+  publish-release:
     if: github.event_name == 'release'
     needs: build-package
     runs-on: ubuntu-latest
@@ -113,9 +113,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  publish-nuget-package:
-    # Only publish to NuGet.org from the modelcontextprotocol/csharp-sdk repository
-    if: ${{ github.event_name == 'release' && github.repository == 'modelcontextprotocol/csharp-sdk' }}
+  publish-nuget:
+    # Only publish to NuGet.org from the jeffhandley/modelcontextprotocol-csharp-sdk repository
+    if: ${{ github.event_name == 'release' && github.repository == 'jeffhandley/modelcontextprotocol-csharp-sdk' }}
     needs: build-package
     runs-on: ubuntu-latest
     steps:
