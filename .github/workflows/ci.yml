@@ -6,11 +6,11 @@ on:
   pull_request:
     branches: ["main"]
 
-permissions:
-  contents: read
-
 jobs:
   build:
+    permissions:
+      contents: read
+
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
