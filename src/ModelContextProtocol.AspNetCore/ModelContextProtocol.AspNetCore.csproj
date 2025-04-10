@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsPackable>true</IsPackable>
-    <PackageId>ModelContextProtocol.AspNetCore</PackageId>
+    <PackageId>JeffHandley.ModelContextProtocol.AspNetCore.Test</PackageId>
     <Description>ASP.NET Core extensions for the C# Model Context Protocol (MCP) SDK.</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <IsAotCompatible>true</IsAotCompatible>
