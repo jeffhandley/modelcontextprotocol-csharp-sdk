@@ -153,8 +153,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   publish-nuget:
-    # Only publish to NuGet.org from the modelcontextprotocol/csharp-sdk repository
-    if: ${{ github.event_name == 'release' && github.repository == 'modelcontextprotocol/csharp-sdk' }}
     needs: build-package
     runs-on: ubuntu-latest
 
