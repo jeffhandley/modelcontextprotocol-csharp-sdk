@@ -3,8 +3,25 @@ name: Build and Test
 on:
   push:
     branches: ["main"]
+    paths:
+      - ".github/workflows/ci-*.yml"
+      - "**/*.sln"
+      - "**/*.props"
+      - "**/Makefile"
+      - "/src/**"
+      - "/tests/**"
+      - "/samples/**"
+
   pull_request:
     branches: ["main"]
+    paths:
+      - ".github/workflows/ci-*.yml"
+      - "**/*.sln"
+      - "**/*.props"
+      - "**/Makefile"
+      - "/src/**"
+      - "/tests/**"
+      - "/samples/**"
 
 permissions:
   contents: read
@@ -79,5 +96,5 @@ jobs:
   publish-coverage:
     if: github.actor != 'dependabot[bot]'
     needs: build
-    uses: ./.github/workflows/code-coverage.yml
+    uses: ./.github/workflows/ci-code-coverage.yml
     secrets: inherit
