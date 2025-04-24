@@ -120,9 +120,9 @@ internal sealed class AIFunctionMcpServerTool : McpServerTool
                     {
                         ExcludeFromSchema = true,
                         BindParameter = (pi, args) =>
-                            GetRequestContext(args)?.Server?.Services?.GetService(pi.ParameterType) ??
+                            GetRequestContext(args)?.Services?.GetService(pi.ParameterType) ??
                             (pi.HasDefaultValue ? null :
-                             throw new ArgumentException("No service of the requested type was found.")),
+                             throw new InvalidOperationException("No service of the requested type was found.")),
                     };
                 }
 
@@ -132,9 +132,9 @@ internal sealed class AIFunctionMcpServerTool : McpServerTool
                     {
                         ExcludeFromSchema = true,
                         BindParameter = (pi, args) =>
-                            (GetRequestContext(args)?.Server?.Services as IKeyedServiceProvider)?.GetKeyedService(pi.ParameterType, keyedAttr.Key) ??
+                            (GetRequestContext(args)?.Services as IKeyedServiceProvider)?.GetKeyedService(pi.ParameterType, keyedAttr.Key) ??
                             (pi.HasDefaultValue ? null :
-                             throw new ArgumentException("No service of the requested type was found.")),
+                             throw new InvalidOperationException("No service of the requested type was found.")),
                     };
                 }
 
@@ -237,7 +237,7 @@ internal sealed class AIFunctionMcpServerTool : McpServerTool
     public override Tool ProtocolTool { get; }
 
     /// <inheritdoc />
-    public override async Task<CallToolResponse> InvokeAsync(
+    public override async ValueTask<CallToolResponse> InvokeAsync(
         RequestContext<CallToolRequestParams> request, CancellationToken cancellationToken = default)
     {
         Throw.IfNull(request);
@@ -245,7 +245,7 @@ internal sealed class AIFunctionMcpServerTool : McpServerTool
 
         AIFunctionArguments arguments = new()
         {
-            Services = request.Server?.Services,
+            Services = request.Services,
             Context = new Dictionary<object, object?>() { [typeof(RequestContext<CallToolRequestParams>)] = request }
         };
 
@@ -265,10 +265,14 @@ internal sealed class AIFunctionMcpServerTool : McpServerTool
         }
         catch (Exception e) when (e is not OperationCanceledException)
         {
-            return new CallToolResponse()
+            string errorMessage = e is McpException ?
+                $"An error occurred invoking '{request.Params?.Name}': {e.Message}" :
+                $"An error occurred invoking '{request.Params?.Name}'.";
+
+            return new()
             {
                 IsError = true,
-                Content = [new() { Text = $"An error occurred invoking '{request.Params?.Name}'.", Type = "text" }],
+                Content = [new() { Text = errorMessage, Type = "text" }],
             };
         }
 
