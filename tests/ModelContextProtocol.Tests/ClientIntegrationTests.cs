@@ -1,10 +1,7 @@
-﻿using Microsoft.Extensions.AI;
+using Microsoft.Extensions.AI;
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol.Messages;
-using ModelContextProtocol.Protocol.Transport;
-using ModelContextProtocol.Protocol.Types;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Tests.Utils;
-using ModelContextProtocol.Utils.Json;
 using OpenAI;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -37,7 +34,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // Act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        await client.PingAsync(TestContext.Current.CancellationToken);
+        await client.PingAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // Assert
         Assert.NotNull(client);
@@ -55,8 +52,10 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         // Assert
         Assert.NotNull(client.ServerCapabilities);
         Assert.NotNull(client.ServerInfo);
-        if (clientId != "everything")   // Note: Comment the below assertion back when the everything server is updated to provide instructions
-            Assert.NotNull(client.ServerInstructions);
+        Assert.NotNull(client.NegotiatedProtocolVersion);
+        Assert.NotNull(client.ServerInstructions);
+
+        Assert.Null(client.SessionId);
     }
 
     [Theory]
@@ -92,9 +91,25 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // assert
         Assert.NotNull(result);
-        Assert.False(result.IsError);
-        var textContent = Assert.Single(result.Content, c => c.Type == "text");
+        Assert.Null(result.IsError);
+        var textContent = Assert.Single(result.Content.OfType<TextContentBlock>());
         Assert.Equal("Echo: Hello MCP!", textContent.Text);
+    }
+
+    [Fact]
+    public async Task CallTool_Stdio_EchoSessionId_ReturnsEmpty()
+    {
+        // arrange
+
+        // act
+        await using var client = await _fixture.CreateClientAsync("test_server");
+        var result = await client.CallToolAsync("echoSessionId", cancellationToken: TestContext.Current.CancellationToken);
+
+        // assert
+        Assert.NotNull(result);
+        Assert.Null(result.IsError);
+        var textContent = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Empty(textContent.Text);
     }
 
     [Theory]
@@ -122,13 +137,13 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        var prompts = await client.ListPromptsAsync(TestContext.Current.CancellationToken);
+        var prompts = await client.ListPromptsAsync(cancellationToken: TestContext.Current.CancellationToken);
 
         // assert
         Assert.NotEmpty(prompts);
         // We could add specific assertions for the known prompts
-        Assert.Contains(prompts, p => p.Name == "simple_prompt");
-        Assert.Contains(prompts, p => p.Name == "complex_prompt");
+        Assert.Contains(prompts, p => p.Name == "simple-prompt");
+        Assert.Contains(prompts, p => p.Name == "args-prompt");
     }
 
     [Theory]
@@ -139,7 +154,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        var result = await client.GetPromptAsync("simple_prompt", null, cancellationToken: TestContext.Current.CancellationToken);
+        var result = await client.GetPromptAsync("simple-prompt", null, cancellationToken: TestContext.Current.CancellationToken);
 
         // assert
         Assert.NotNull(result);
@@ -156,10 +171,10 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         await using var client = await _fixture.CreateClientAsync(clientId);
         var arguments = new Dictionary<string, object?>
         {
-            { "temperature", "0.7" },
-            { "style", "formal" }
+            { "city", "Seattle" },
+            { "state", "WA" }
         };
-        var result = await client.GetPromptAsync("complex_prompt", arguments, cancellationToken: TestContext.Current.CancellationToken);
+        var result = await client.GetPromptAsync("args-prompt", arguments, cancellationToken: TestContext.Current.CancellationToken);
 
         // assert
         Assert.NotNull(result);
@@ -174,8 +189,8 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        await Assert.ThrowsAsync<McpException>(() =>
-            client.GetPromptAsync("non_existent_prompt", null, cancellationToken: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<McpProtocolException>(async () =>
+            await client.GetPromptAsync("non_existent_prompt", null, cancellationToken: TestContext.Current.CancellationToken));
     }
 
     [Theory]
@@ -187,10 +202,10 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
 
-        IList<ResourceTemplate> allResourceTemplates = await client.ListResourceTemplatesAsync(TestContext.Current.CancellationToken);
+        IList<McpClientResourceTemplate> allResourceTemplates = await client.ListResourceTemplatesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        // The server provides a single test resource template
-        Assert.Single(allResourceTemplates);
+        // The server provides test resource templates
+        Assert.NotEmpty(allResourceTemplates);
     }
 
     [Theory]
@@ -202,10 +217,10 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
 
-        IList<Resource> allResources = await client.ListResourcesAsync(TestContext.Current.CancellationToken);
+        IList<McpClientResource> allResources = await client.ListResourcesAsync(cancellationToken: TestContext.Current.CancellationToken);
 
-        // The server provides 100 test resources
-        Assert.Equal(100, allResources.Count);
+        // The server provides test resources
+        Assert.NotEmpty(allResources);
     }
 
     [Theory]
@@ -216,34 +231,36 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        // Odd numbered resources are text in the everything server (despite the docs saying otherwise)
-        // 1 is index 0, which is "even" in the 0-based index
-        var result = await client.ReadResourceAsync("test://static/resource/1", TestContext.Current.CancellationToken);
+        // Get available resources and read one that is text
+        var resources = await client.ListResourcesAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var textResource = resources.First(r => r.MimeType?.StartsWith("text/", StringComparison.Ordinal) is true);
+        var result = await client.ReadResourceAsync(textResource.Uri, null, TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Single(result.Contents);
 
-        TextResourceContents textResource = Assert.IsType<TextResourceContents>(result.Contents[0]);
-        Assert.NotNull(textResource.Text);
+        TextResourceContents textContent = Assert.IsType<TextResourceContents>(result.Contents[0]);
+        Assert.NotNull(textContent.Text);
     }
 
-    [Theory]
-    [MemberData(nameof(GetClients))]
-    public async Task ReadResource_Stdio_BinaryResource(string clientId)
+    // The latest "everything" server only exposes text-based file resources in its resource list;
+    // binary resources are available via resource templates but not in the listed resources.
+    [Fact]
+    public async Task ReadResource_Stdio_BinaryResource()
     {
         // arrange
+        var clientId = "test_server";
 
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        // Even numbered resources are binary in the everything server (despite the docs saying otherwise)
-        // 2 is index 1, which is "odd" in the 0-based index
-        var result = await client.ReadResourceAsync("test://static/resource/2", TestContext.Current.CancellationToken);
+        // Read a binary resource from the test server
+        var result = await client.ReadResourceAsync("test://static/resource/2", null, TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Single(result.Contents);
 
         BlobResourceContents blobResource = Assert.IsType<BlobResourceContents>(result.Contents[0]);
-        Assert.NotNull(blobResource.Blob);
+        Assert.False(blobResource.Blob.IsEmpty);
     }
 
     // Not supported by "everything" server version on npx
@@ -257,7 +274,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         TaskCompletionSource<bool> tcs = new();
         await using var client = await _fixture.CreateClientAsync(clientId, new()
         {
-            Capabilities = new()
+            Handlers = new()
             {
                 NotificationHandlers =
                 [
@@ -271,7 +288,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
             }
         });
 
-        await client.SubscribeToResourceAsync("test://static/resource/1", TestContext.Current.CancellationToken);
+        await client.SubscribeToResourceAsync("test://static/resource/1", null, TestContext.Current.CancellationToken);
 
         await tcs.Task;
     }
@@ -287,7 +304,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         TaskCompletionSource<bool> receivedNotification = new();
         await using var client = await _fixture.CreateClientAsync(clientId, new()
         {
-            Capabilities = new()
+            Handlers = new()
             {
                 NotificationHandlers =
                 [
@@ -300,30 +317,29 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
                 ]
             }
         });
-        await client.SubscribeToResourceAsync("test://static/resource/1", TestContext.Current.CancellationToken);
+        await client.SubscribeToResourceAsync("test://static/resource/1", null, TestContext.Current.CancellationToken);
 
         // wait until we received a notification
         await receivedNotification.Task;
 
         // unsubscribe
-        await client.UnsubscribeFromResourceAsync("test://static/resource/1", TestContext.Current.CancellationToken);
+        await client.UnsubscribeFromResourceAsync("test://static/resource/1", null, TestContext.Current.CancellationToken);
     }
 
     [Theory]
     [MemberData(nameof(GetClients))]
-    public async Task Complete_Stdio_ResourceReference(string clientId)
+    public async Task Complete_Stdio_ResourceTemplateReference(string clientId)
     {
         // arrange
 
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        var result = await client.CompleteAsync(new Reference
-        {
-            Type = "ref/resource",
-            Uri = "test://static/resource/1"
-        },
-            "argument_name", "1",
-            TestContext.Current.CancellationToken
+        var templates = await client.ListResourceTemplatesAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var template = templates.First();
+        var result = await client.CompleteAsync(
+            new ResourceTemplateReference { Uri = template.UriTemplate },
+            "resourceId", "1",
+            cancellationToken: TestContext.Current.CancellationToken
         );
 
         Assert.NotNull(result);
@@ -339,18 +355,15 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // act
         await using var client = await _fixture.CreateClientAsync(clientId);
-        var result = await client.CompleteAsync(new Reference
-        {
-            Type = "ref/prompt",
-            Name = "irrelevant"
-        },
-            argumentName: "style", argumentValue: "fo",
-            TestContext.Current.CancellationToken
+        var result = await client.CompleteAsync(
+            new PromptReference { Name = "completable-prompt" },
+            argumentName: "department", argumentValue: "Eng",
+            cancellationToken: TestContext.Current.CancellationToken
         );
 
         Assert.NotNull(result);
         Assert.Single(result.Completion.Values);
-        Assert.Equal("formal", result.Completion.Values[0]);
+        Assert.Equal("Engineering", result.Completion.Values[0]);
     }
 
     [Theory]
@@ -361,31 +374,24 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         int samplingHandlerCalls = 0;
         await using var client = await _fixture.CreateClientAsync(clientId, new()
         {
-            Capabilities = new()
+            Handlers = new()
             {
-                Sampling = new()
+                SamplingHandler = async (_, _, _) =>
                 {
-                    SamplingHandler = async (_, _, _) =>
+                    samplingHandlerCalls++;
+                    return new CreateMessageResult
                     {
-                        samplingHandlerCalls++;
-                        return new CreateMessageResult
-                        {
-                            Model = "test-model",
-                            Role = Role.Assistant,
-                            Content = new Content
-                            {
-                                Type = "text",
-                                Text = "Test response"
-                            }
-                        };
-                    },
-                },
-            },
+                        Model = "test-model",
+                        Role = Role.Assistant,
+                        Content = [new TextContentBlock { Text = "Test response" }],
+                    };
+                }
+            }
         });
 
-        // Call the server's sampleLLM tool which should trigger our sampling handler
+        // Call the server's trigger-sampling-request tool which should trigger our sampling handler
         var result = await client.CallToolAsync(
-            "sampleLLM",
+            "trigger-sampling-request",
             new Dictionary<string, object?>
             {
                 ["prompt"] = "Test prompt",
@@ -395,15 +401,14 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // assert
         Assert.NotNull(result);
-        var textContent = Assert.Single(result.Content);
-        Assert.Equal("text", textContent.Type);
+        var textContent = Assert.Single(result.Content.OfType<TextContentBlock>());
         Assert.False(string.IsNullOrEmpty(textContent.Text));
     }
 
     //[Theory]
     //[MemberData(nameof(GetClients))]
     //public async Task Roots_Stdio_EverythingServer(string clientId)
-    //{       
+    //{
     //    var rootsHandlerCalls = 0;
     //    var testRoots = new List<Root>
     //    {
@@ -438,7 +443,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         await using var client = await _fixture.CreateClientAsync(clientId);
 
         // Verify we can send notifications without errors
-        await client.SendNotificationAsync(NotificationMethods.RootsUpdatedNotification, cancellationToken: TestContext.Current.CancellationToken);
+        await client.SendNotificationAsync(NotificationMethods.RootsListChangedNotification, cancellationToken: TestContext.Current.CancellationToken);
         await client.SendNotificationAsync("test/notification", new TestNotification { Test = true }, cancellationToken: TestContext.Current.CancellationToken, serializerOptions: JsonContext3.Default.Options);
 
         // assert
@@ -467,10 +472,10 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
             ClientInfo = new() { Name = "IntegrationTestClient", Version = "1.0.0" }
         };
 
-        await using var client = await McpClientFactory.CreateAsync(
+        await using var client = await McpClient.CreateAsync(
             new StdioClientTransport(stdioOptions),
-            clientOptions, 
-            loggerFactory: LoggerFactory, 
+            clientOptions,
+            loggerFactory: LoggerFactory,
             cancellationToken: TestContext.Current.CancellationToken);
 
         // act
@@ -481,7 +486,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
 
         // assert
         Assert.NotNull(result);
-        Assert.False(result.IsError);
+        Assert.Null(result.IsError);
         Assert.Single(result.Content, c => c.Type == "text");
 
         await client.DisposeAsync();
@@ -491,7 +496,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
     public async Task ListToolsAsync_UsingEverythingServer_ToolsAreProperlyCalled()
     {
         // Get the MCP client and tools from it.
-        await using var client = await McpClientFactory.CreateAsync(
+        await using var client = await McpClient.CreateAsync(
             new StdioClientTransport(_fixture.EverythingServerTransportOptions),
             cancellationToken: TestContext.Current.CancellationToken);
         var mappedTools = await client.ListToolsAsync(cancellationToken: TestContext.Current.CancellationToken);
@@ -523,27 +528,24 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         var samplingHandler = new OpenAIClient(s_openAIKey).GetChatClient("gpt-4o-mini")
             .AsIChatClient()
             .CreateSamplingHandler();
-        await using var client = await McpClientFactory.CreateAsync(new StdioClientTransport(_fixture.EverythingServerTransportOptions), new()
+        await using var client = await McpClient.CreateAsync(new StdioClientTransport(_fixture.EverythingServerTransportOptions), new()
         {
-            Capabilities = new()
+            Handlers = new()
             {
-                Sampling = new()
-                {
-                    SamplingHandler = samplingHandler,
-                },
-            },
+                SamplingHandler = samplingHandler
+            }
         }, cancellationToken: TestContext.Current.CancellationToken);
 
-        var result = await client.CallToolAsync("sampleLLM", new Dictionary<string, object?>()
+        var result = await client.CallToolAsync("trigger-sampling-request", new Dictionary<string, object?>()
         {
             ["prompt"] = "In just a few words, what is the most famous tower in Paris?",
         }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.NotEmpty(result.Content);
-        Assert.Equal("text", result.Content[0].Type);
-        Assert.Contains("LLM sampling result:", result.Content[0].Text);
-        Assert.Contains("Eiffel", result.Content[0].Text);
+        var content = Assert.IsType<TextContentBlock>(result.Content[0]);
+        Assert.Contains("LLM sampling result:", content.Text);
+        Assert.Contains("Eiffel", content.Text);
     }
 
     [Theory]
@@ -553,7 +555,7 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         TaskCompletionSource<bool> receivedNotification = new();
         await using var client = await _fixture.CreateClientAsync(clientId, new()
         {
-            Capabilities = new()
+            Handlers = new()
             {
                 NotificationHandlers =
                 [
@@ -571,10 +573,206 @@ public partial class ClientIntegrationTests : LoggedTest, IClassFixture<ClientIn
         });
 
         // act
-        await client.SetLoggingLevel(LoggingLevel.Debug, TestContext.Current.CancellationToken);
+        await client.SetLoggingLevelAsync(LoggingLevel.Debug, options: null, TestContext.Current.CancellationToken);
+
+        if (clientId == "everything")
+        {
+            // The everything server requires calling the toggle-simulated-logging tool to start sending log messages
+            await client.CallToolAsync("toggle-simulated-logging", new Dictionary<string, object?>(), cancellationToken: TestContext.Current.CancellationToken);
+        }
 
         // assert
         await receivedNotification.Task;
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task ListToolsAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        var result = await client.ListToolsAsync(new ListToolsRequestParams(), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.NotEmpty(result.Tools);
+        Assert.Contains(result.Tools, t => t.Name == "echo");
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task ListPromptsAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        var result = await client.ListPromptsAsync(new ListPromptsRequestParams(), TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.NotEmpty(result.Prompts);
+        Assert.Contains(result.Prompts, p => p.Name == "simple-prompt");
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task GetPromptAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        var result = await client.GetPromptAsync(
+            new GetPromptRequestParams { Name = "simple-prompt" },
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.NotEmpty(result.Messages);
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task ListResourceTemplatesAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        var result = await client.ListResourceTemplatesAsync(
+            new ListResourceTemplatesRequestParams(),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.NotEmpty(result.ResourceTemplates);
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task ListResourcesAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        var result = await client.ListResourcesAsync(
+            new ListResourcesRequestParams(),
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        // Low-level API returns only one page; the server provides resources but paginates
+        Assert.NotEmpty(result.Resources);
+        Assert.True(result.Resources.Count <= 100);
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task ReadResourceAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        // Get available resources and read the first one
+        var resources = await client.ListResourcesAsync(cancellationToken: TestContext.Current.CancellationToken);
+        var resource = resources.First();
+        var result = await client.ReadResourceAsync(
+            new ReadResourceRequestParams { Uri = resource.Uri },
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Single(result.Contents);
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task CompleteAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        var result = await client.CompleteAsync(
+            new CompleteRequestParams
+            {
+                Ref = new PromptReference { Name = "completable-prompt" },
+                Argument = new Argument { Name = "department", Value = "Eng" }
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Single(result.Completion.Values);
+        Assert.Equal("Engineering", result.Completion.Values[0]);
+    }
+
+    [Theory]
+    [MemberData(nameof(GetClients))]
+    public async Task CallToolAsync_WithRequestParams_ReturnsRawResult(string clientId)
+    {
+        await using var client = await _fixture.CreateClientAsync(clientId);
+
+        var result = await client.CallToolAsync(
+            new CallToolRequestParams
+            {
+                Name = "echo",
+                Arguments = new Dictionary<string, JsonElement>
+                {
+                    ["message"] = JsonSerializer.SerializeToElement("Hello from RequestParams!", McpJsonUtilities.DefaultOptions)
+                }
+            },
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Null(result.IsError);
+        var textContent = Assert.Single(result.Content.OfType<TextContentBlock>());
+        Assert.Equal("Echo: Hello from RequestParams!", textContent.Text);
+    }
+
+    // Not supported by "everything" server version on npx
+    [Fact]
+    public async Task SubscribeToResourceAsync_WithRequestParams_Succeeds()
+    {
+        var clientId = "test_server";
+
+        TaskCompletionSource<bool> tcs = new();
+        await using var client = await _fixture.CreateClientAsync(clientId, new()
+        {
+            Handlers = new()
+            {
+                NotificationHandlers =
+                [
+                    new(NotificationMethods.ResourceUpdatedNotification, (notification, cancellationToken) =>
+                    {
+                        tcs.TrySetResult(true);
+                        return default;
+                    })
+                ]
+            }
+        });
+
+        await client.SubscribeToResourceAsync(
+            new SubscribeRequestParams { Uri = "test://static/resource/1" },
+            TestContext.Current.CancellationToken);
+
+        await tcs.Task;
+    }
+
+    // Not supported by "everything" server version on npx
+    [Fact]
+    public async Task UnsubscribeFromResourceAsync_WithRequestParams_Succeeds()
+    {
+        var clientId = "test_server";
+
+        TaskCompletionSource<bool> receivedNotification = new();
+        await using var client = await _fixture.CreateClientAsync(clientId, new()
+        {
+            Handlers = new()
+            {
+                NotificationHandlers =
+                [
+                    new(NotificationMethods.ResourceUpdatedNotification, (notification, cancellationToken) =>
+                    {
+                        receivedNotification.TrySetResult(true);
+                        return default;
+                    })
+                ]
+            }
+        });
+        await client.SubscribeToResourceAsync(
+            new SubscribeRequestParams { Uri = "test://static/resource/1" },
+            TestContext.Current.CancellationToken);
+
+        await receivedNotification.Task;
+
+        await client.UnsubscribeFromResourceAsync(
+            new UnsubscribeRequestParams { Uri = "test://static/resource/1" },
+            TestContext.Current.CancellationToken);
     }
 
     [JsonSerializable(typeof(TestNotification))]

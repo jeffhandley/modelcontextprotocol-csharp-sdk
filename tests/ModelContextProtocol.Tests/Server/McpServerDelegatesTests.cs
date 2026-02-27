@@ -1,10 +1,18 @@
-﻿using ModelContextProtocol.Protocol.Types;
+﻿using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using System.Runtime.InteropServices;
 
 namespace ModelContextProtocol.Tests.Server;
 
 public class McpServerHandlerTests
 {
+    public McpServerHandlerTests()
+    {
+#if !NET
+        Assert.SkipWhen(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "https://github.com/modelcontextprotocol/csharp-sdk/issues/587");
+#endif
+    }
+
     [Fact]
     public void AllPropertiesAreSettable()
     {
@@ -22,7 +30,7 @@ public class McpServerHandlerTests
         Assert.Null(handlers.UnsubscribeFromResourcesHandler);
 
         handlers.ListToolsHandler = async (p, c) => new ListToolsResult();
-        handlers.CallToolHandler = async (p, c) => new CallToolResponse();
+        handlers.CallToolHandler = async (p, c) => new CallToolResult();
         handlers.ListPromptsHandler = async (p, c) => new ListPromptsResult();
         handlers.GetPromptHandler = async (p, c) => new GetPromptResult();
         handlers.ListResourceTemplatesHandler = async (p, c) => new ListResourceTemplatesResult();

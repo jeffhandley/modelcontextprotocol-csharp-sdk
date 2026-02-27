@@ -1,5 +1,5 @@
 ﻿using ModelContextProtocol;
-using ModelContextProtocol.Protocol.Types;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
 
@@ -10,12 +10,12 @@ public class LongRunningTool
 {
     [McpServerTool(Name = "longRunningOperation"), Description("Demonstrates a long running operation with progress updates")]
     public static async Task<string> LongRunningOperation(
-        IMcpServer server,
+        McpServer server,
         RequestContext<CallToolRequestParams> context,
         int duration = 10,
         int steps = 5)
     {
-        var progressToken = context.Params?.Meta?.ProgressToken;
+        var progressToken = context.Params?.ProgressToken;
         var stepDuration = duration / steps;
 
         for (int i = 1; i <= steps + 1; i++)

@@ -1,5 +1,6 @@
 ﻿using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol.Transport;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using ModelContextProtocol.Tests.Utils;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
@@ -8,7 +9,7 @@ namespace ModelContextProtocol.Tests;
 
 public class StdioServerIntegrationTests(ITestOutputHelper testOutputHelper) : LoggedTest(testOutputHelper)
 {
-    public static bool CanSendSigInt { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX);
+    public static bool CanSendSigInt { get; } = (RuntimeInformation.IsOSPlatform(OSPlatform.Linux) || RuntimeInformation.IsOSPlatform(OSPlatform.OSX)) && !PlatformDetection.IsMonoRuntime;
     private const int SIGINT = 2;
 
     [Fact(Skip = "Platform not supported by this test.", SkipUnless = nameof(CanSendSigInt))]
@@ -34,7 +35,7 @@ public class StdioServerIntegrationTests(ITestOutputHelper testOutputHelper) : L
             process.StandardInput.BaseStream,
             serverName: "TestServerWithHosting");
 
-        await using var client = await McpClientFactory.CreateAsync(
+        await using var client = await McpClient.CreateAsync(
             new TestClientTransport(streamServerTransport),
             loggerFactory: LoggerFactory,
             cancellationToken: TestContext.Current.CancellationToken);
@@ -45,9 +46,7 @@ public class StdioServerIntegrationTests(ITestOutputHelper testOutputHelper) : L
         // https://github.com/dotnet/runtime/issues/109432, https://github.com/dotnet/runtime/issues/44944
         Assert.Equal(0, kill(process.Id, SIGINT));
 
-        using var shutdownCts = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
-        shutdownCts.CancelAfter(TimeSpan.FromSeconds(10));
-        await process.WaitForExitAsync(shutdownCts.Token);
+        await process.WaitForExitAsync(TestConstants.DefaultTimeout);
 
         Assert.True(process.HasExited);
         Assert.Equal(0, process.ExitCode);

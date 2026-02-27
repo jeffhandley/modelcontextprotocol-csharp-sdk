@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
 using ModelContextProtocol.AspNetCore.Tests.Utils;
 using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol.Transport;
 using ModelContextProtocol.Tests.Utils;
 using ModelContextProtocol.TestSseServer;
+using System.Net;
 
 namespace ModelContextProtocol.AspNetCore.Tests;
 
@@ -18,44 +18,45 @@ public class SseServerIntegrationTestFixture : IAsyncDisposable
     // multiple tests, so this dispatches the output to the current test.
     private readonly DelegatingTestOutputHelper _delegatingTestOutputHelper = new();
 
-    private SseClientTransportOptions DefaultTransportOptions { get; } = new()
+    private HttpClientTransportOptions DefaultTransportOptions { get; set; } = new()
     {
-        Endpoint = new Uri("http://localhost/sse"),
-        Name = "TestServer",
+        Endpoint = new("http://localhost:5000/"),
     };
 
     public SseServerIntegrationTestFixture()
     {
-        var socketsHttpHandler = new SocketsHttpHandler()
+        var socketsHttpHandler = new SocketsHttpHandler
         {
             ConnectCallback = (context, token) =>
             {
-                var connection = _inMemoryTransport.CreateConnection();
+                var connection = _inMemoryTransport.CreateConnection(new DnsEndPoint("localhost", 5000));
                 return new(connection.ClientStream);
             },
         };
 
         HttpClient = new HttpClient(socketsHttpHandler)
         {
-            BaseAddress = DefaultTransportOptions.Endpoint,
+            BaseAddress = new("http://localhost:5000/"),
         };
+
         _serverTask = Program.MainAsync([], new XunitLoggerProvider(_delegatingTestOutputHelper), _inMemoryTransport, _stopCts.Token);
     }
 
     public HttpClient HttpClient { get; }
 
-    public Task<IMcpClient> ConnectMcpClientAsync(McpClientOptions? options, ILoggerFactory loggerFactory)
+    public Task<McpClient> ConnectMcpClientAsync(McpClientOptions? options, ILoggerFactory loggerFactory)
     {
-        return McpClientFactory.CreateAsync(
-            new SseClientTransport(DefaultTransportOptions, HttpClient, loggerFactory),
+        return McpClient.CreateAsync(
+            new HttpClientTransport(DefaultTransportOptions, HttpClient, loggerFactory),
             options,
             loggerFactory,
             TestContext.Current.CancellationToken);
     }
 
-    public void Initialize(ITestOutputHelper output)
+    public void Initialize(ITestOutputHelper output, HttpClientTransportOptions clientTransportOptions)
     {
         _delegatingTestOutputHelper.CurrentTestOutputHelper = output;
+        DefaultTransportOptions = clientTransportOptions;
     }
 
     public void TestCompleted()

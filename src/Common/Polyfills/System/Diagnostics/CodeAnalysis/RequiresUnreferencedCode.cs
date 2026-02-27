@@ -1,11 +1,12 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#if !NET
 namespace System.Diagnostics.CodeAnalysis;
 
 /// <summary>
 /// Indicates that the specified method requires dynamic access to code that is not referenced
-/// statically, for example through <see cref="System.Reflection"/>.
+/// statically, for example through <see cref="Reflection"/>.
 /// </summary>
 /// <remarks>
 /// This allows tools to understand which methods are unsafe to call when removing unreferenced
@@ -37,3 +38,4 @@ internal sealed class RequiresUnreferencedCodeAttribute : Attribute
     /// </summary>
     public string? Url { get; set; }
 }
+#endif

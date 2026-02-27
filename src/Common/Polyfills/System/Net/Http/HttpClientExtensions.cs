@@ -1,4 +1,5 @@
-using ModelContextProtocol.Utils;
+#if !NET
+using ModelContextProtocol;
 
 namespace System.Net.Http;
 
@@ -20,3 +21,4 @@ internal static class HttpClientExtensions
         return await content.ReadAsStringAsync();
     }
 }
+#endif

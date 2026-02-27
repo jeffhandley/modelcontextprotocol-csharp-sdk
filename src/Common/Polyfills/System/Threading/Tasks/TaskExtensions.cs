@@ -1,4 +1,5 @@
-using ModelContextProtocol.Utils;
+#if !NET
+using ModelContextProtocol;
 
 namespace System.Threading.Tasks;
 
@@ -50,3 +51,4 @@ internal static class TaskExtensions
         await task.ConfigureAwait(false);
     }
 }
+#endif

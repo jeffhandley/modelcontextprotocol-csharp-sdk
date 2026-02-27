@@ -1,10 +1,19 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
-using ModelContextProtocol.Protocol.Types;
+using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using System.Runtime.InteropServices;
 
 namespace ModelContextProtocol.Tests.Server;
+
 public class McpServerLoggingLevelTests
 {
+    public McpServerLoggingLevelTests()
+    {
+#if !NET
+        Assert.SkipWhen(RuntimeInformation.IsOSPlatform(OSPlatform.Windows), "https://github.com/modelcontextprotocol/csharp-sdk/issues/587");
+#endif
+    }
+
     [Fact]
     public void CanCreateServerWithLoggingLevelHandler()
     {
@@ -16,7 +25,7 @@ public class McpServerLoggingLevelTests
 
         var provider = services.BuildServiceProvider();
 
-        provider.GetRequiredService<IMcpServer>();
+        provider.GetRequiredService<McpServer>();
     }
 
     [Fact]
@@ -30,10 +39,10 @@ public class McpServerLoggingLevelTests
 
         var provider = services.BuildServiceProvider();
 
-        var server = provider.GetRequiredService<IMcpServer>();
+        var server = provider.GetRequiredService<McpServer>();
 
         Assert.NotNull(server.ServerOptions.Capabilities?.Logging);
-        Assert.NotNull(server.ServerOptions.Capabilities.Logging.SetLoggingLevelHandler);
+        Assert.NotNull(server.ServerOptions.Handlers.SetLoggingLevelHandler);
     }
 
     [Fact]
@@ -43,7 +52,7 @@ public class McpServerLoggingLevelTests
         services.AddMcpServer()
             .WithStdioServerTransport();
         var provider = services.BuildServiceProvider();
-        var server = provider.GetRequiredService<IMcpServer>();
+        var server = provider.GetRequiredService<McpServer>();
         Assert.Null(server.ServerOptions.Capabilities?.Logging);
     }
 }

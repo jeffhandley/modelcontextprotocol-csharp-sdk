@@ -2,10 +2,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using ModelContextProtocol.Protocol.Messages;
-using ModelContextProtocol.Protocol.Transport;
 using ModelContextProtocol.Server;
-using ModelContextProtocol.Utils.Json;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
@@ -18,7 +15,7 @@ internal sealed class SseHandler(
     IHostApplicationLifetime hostApplicationLifetime,
     ILoggerFactory loggerFactory)
 {
-    private readonly ConcurrentDictionary<string, HttpMcpSession<SseResponseStreamTransport>> _sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, SseSession> _sessions = new(StringComparer.Ordinal);
 
     public async Task HandleSseRequestAsync(HttpContext context)
     {
@@ -33,9 +30,12 @@ internal sealed class SseHandler(
 
         var requestPath = (context.Request.PathBase + context.Request.Path).ToString();
         var endpointPattern = requestPath[..(requestPath.LastIndexOf('/') + 1)];
-        await using var transport = new SseResponseStreamTransport(context.Response.Body, $"{endpointPattern}message?sessionId={sessionId}");
-        await using var httpMcpSession = new HttpMcpSession<SseResponseStreamTransport>(sessionId, transport, context.User, httpMcpServerOptions.Value.TimeProvider);
-        if (!_sessions.TryAdd(sessionId, httpMcpSession))
+        await using var transport = new SseResponseStreamTransport(context.Response.Body, $"{endpointPattern}message?sessionId={sessionId}", sessionId);
+
+        var userIdClaim = StreamableHttpHandler.GetUserIdClaim(context.User);
+        var sseSession = new SseSession(transport, userIdClaim);
+
+        if (!_sessions.TryAdd(sessionId, sseSession))
         {
             throw new UnreachableException($"Unreachable given good entropy! Session with ID '{sessionId}' has already been created.");
         }
@@ -53,13 +53,13 @@ internal sealed class SseHandler(
 
             try
             {
-                await using var mcpServer = McpServerFactory.Create(transport, mcpServerOptions, loggerFactory, context.RequestServices);
-                httpMcpSession.Server = mcpServer;
+                await using var mcpServer = McpServer.Create(transport, mcpServerOptions, loggerFactory, context.RequestServices);
                 context.Features.Set(mcpServer);
 
+#pragma warning disable MCPEXP002 // RunSessionHandler is experimental
                 var runSessionAsync = httpMcpServerOptions.Value.RunSessionHandler ?? StreamableHttpHandler.RunSessionAsync;
-                httpMcpSession.ServerRunTask = runSessionAsync(context, mcpServer, cancellationToken);
-                await httpMcpSession.ServerRunTask;
+#pragma warning restore MCPEXP002
+                await runSessionAsync(context, mcpServer, cancellationToken);
             }
             finally
             {
@@ -86,27 +86,29 @@ internal sealed class SseHandler(
             return;
         }
 
-        if (!_sessions.TryGetValue(sessionId.ToString(), out var httpMcpSession))
+        if (!_sessions.TryGetValue(sessionId.ToString(), out var sseSession))
         {
             await Results.BadRequest($"Session ID not found.").ExecuteAsync(context);
             return;
         }
 
-        if (!httpMcpSession.HasSameUserId(context.User))
+        if (sseSession.UserId != StreamableHttpHandler.GetUserIdClaim(context.User))
         {
             await Results.Forbid().ExecuteAsync(context);
             return;
         }
 
-        var message = (JsonRpcMessage?)await context.Request.ReadFromJsonAsync(McpJsonUtilities.DefaultOptions.GetTypeInfo(typeof(JsonRpcMessage)), context.RequestAborted);
+        var message = await StreamableHttpHandler.ReadJsonRpcMessageAsync(context);
         if (message is null)
         {
             await Results.BadRequest("No message in request body.").ExecuteAsync(context);
             return;
         }
 
-        await httpMcpSession.Transport.OnMessageReceivedAsync(message, context.RequestAborted);
+        await sseSession.Transport.OnMessageReceivedAsync(message, context.RequestAborted);
         context.Response.StatusCode = StatusCodes.Status202Accepted;
         await context.Response.WriteAsync("Accepted");
     }
+
+    private record SseSession(SseResponseStreamTransport Transport, UserIdClaim? UserId);
 }

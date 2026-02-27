@@ -1,13 +1,12 @@
-﻿using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol.Transport;
-using Microsoft.Extensions.AI;
-using OpenAI;
-
-using OpenTelemetry;
-using OpenTelemetry.Trace;
+﻿using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging;
+using ModelContextProtocol;
+using ModelContextProtocol.Client;
+using OpenAI;
+using OpenTelemetry;
 using OpenTelemetry.Logs;
 using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 
 using var tracerProvider = Sdk.CreateTracerProviderBuilder()
     .AddHttpClientInstrumentation()
@@ -34,7 +33,7 @@ using IChatClient samplingClient = openAIClient.AsIChatClient()
     .UseOpenTelemetry(loggerFactory: loggerFactory, configure: o => o.EnableSensitiveData = true)
     .Build();
 
-var mcpClient = await McpClientFactory.CreateAsync(
+var mcpClient = await McpClient.CreateAsync(
     new StdioClientTransport(new()
     {
         Command = "npx",
@@ -43,7 +42,10 @@ var mcpClient = await McpClientFactory.CreateAsync(
     }),
     clientOptions: new()
     {
-        Capabilities = new() { Sampling = new() { SamplingHandler = samplingClient.CreateSamplingHandler() } },
+        Handlers = new()
+        {
+            SamplingHandler = samplingClient.CreateSamplingHandler()
+        }
     },
     loggerFactory: loggerFactory);
 
