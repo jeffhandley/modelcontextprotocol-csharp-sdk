@@ -140,7 +140,7 @@ This step adds significant value but also significant API calls. If the user ask
 Produce the triage report following the template in [references/report-format.md](references/report-format.md). The report must follow the BLUF structure with urgency-descending ordering.
 
 **Output destination:**
-- **Default (local file):** Save as `{YYYY-MM-DD}-mcp-issue-triage.md` in the current working directory. If a file with that name already exists, suffix with `-2`, `-3`, etc.
+- **Default (local file):** Save as `artifacts/skill-output/{YYYY-MM-DD}-mcp-issue-triage.md` at the SDK repo root. Create the `artifacts/skill-output/` directory if it doesn't exist (the `artifacts/` directory is already gitignored). If a file with that name already exists, suffix with `-2`, `-3`, etc.
 - **Gist (if requested):** If the user asked to save as a gist, create a **secret** gist using `gh gist create` with a `--desc` describing the report. No confirmation is needed — create the gist, then notify the user with a clickable link to it.
 
 The user may request a gist with phrases like "save as a gist", "create a gist", "gist it", "post to gist", etc.
