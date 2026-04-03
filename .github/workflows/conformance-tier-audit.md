@@ -23,6 +23,14 @@ tools:
   bash: true
   github: true
 
+safe-outputs:
+  create-issue:
+    title-prefix: "C# SDK Conformance Audit: "
+    labels: [automation]
+    assignees: [jeffhandley]
+    max: 1
+    close-older-issues: true
+
 timeout-minutes: 240
 
 on:
@@ -120,7 +128,7 @@ Read and follow the conformance-tier-audit skill at `.github/skills/conformance-
 
 **Important**: The `--repo` and `--branch` values above are for GitHub API checks (issue triage, labels, policy signals) and must always target the upstream `modelcontextprotocol/csharp-sdk` repo on `main`. The SDK source code being audited (conformance server/client) comes from the current repository checkout.
 
-### Output to Workflow Summary
+### Output to Workflow Summary and Issue
 
 Instead of writing files to `artifacts/skill-output/`, write **all** reports to the GitHub Actions step summary (`$GITHUB_STEP_SUMMARY`). This makes the reports visible directly in the workflow run summary page.
 
@@ -139,3 +147,11 @@ Write the content to `$GITHUB_STEP_SUMMARY` using bash, for example:
     echo "<details><summary>📋 Full Assessment Report</summary>" >> "$GITHUB_STEP_SUMMARY"
     echo "...assessment content..." >> "$GITHUB_STEP_SUMMARY"
     echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+
+After writing the step summary, also create a GitHub issue using the `create-issue` safe output with the same report content. The issue title must follow this structure (do **not** include the `title-prefix` — it is added automatically):
+
+    {yyyy-MM-dd} - Tier {N}
+
+For example: `2026-04-03 - Tier 3`
+
+The issue body should contain the same content written to `$GITHUB_STEP_SUMMARY`.
