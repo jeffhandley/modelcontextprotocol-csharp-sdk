@@ -6,6 +6,11 @@ permissions:
   issues: read
   pull-requests: read
 
+# Allow only one audit run at a time. Queue the next run instead of canceling the current one.
+concurrency:
+  group: "conformance-tier-audit"
+  cancel-in-progress: false
+
 runtimes:
   dotnet:
     version: "10.0"
@@ -21,7 +26,9 @@ network:
 
 tools:
   bash: true
-  github: true
+  github:
+    toolsets: [default]
+    min-integrity: none
 
 safe-outputs:
   create-issue:
@@ -125,6 +132,8 @@ Read and follow the conformance-tier-audit skill at `.github/skills/conformance-
 - **`--branch`**: `main` (always — for GitHub API checks against the upstream repo)
 - **`--framework net9.0`** for the conformance server and client
 - When cloning the conformance repo, use `https://github.com/${{ github.event.inputs.conformance-repo || 'modelcontextprotocol/conformance' }}.git` and checkout branch `${{ github.event.inputs.conformance-branch || 'main' }}`
+- If client conformance is below the tier threshold, inspect the detailed client result JSON/logs before writing remediation. Distinguish confirmed behavior failures (for example `"Tool was not called by client"` or missing SSE reconnect) from conformance-client / audit-harness gaps (for example `Expected Check Missing` or `0 passed, 0 failed`, such as `initialize`). Do not prescribe SDK implementation work for the latter unless the logs show a concrete SDK exception or protocol defect.
+- For issue triage, read the upstream repo's issues without integrity filtering. If scoring still cannot be computed, report the exact reason (for example rate limits, missing token, or no qualifying issues) instead of the generic phrase `GitHub auth unavailable`.
 
 **Important**: The `--repo` and `--branch` values above are for GitHub API checks (issue triage, labels, policy signals) and must always target the upstream `modelcontextprotocol/csharp-sdk` repo on `main`. The SDK source code being audited (conformance server/client) comes from the current repository checkout.
 
