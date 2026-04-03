@@ -6,6 +6,25 @@ permissions:
   issues: read
   pull-requests: read
 
+runtimes:
+  dotnet:
+    version: "10.0"
+    action-version: "v5"
+  node:
+    version: "24"
+
+network:
+  allowed:
+    - defaults
+    - node
+    - dotnet
+
+tools:
+  bash: true
+  github: true
+
+timeout-minutes: 240
+
 on:
   schedule:
     - cron: "weekly on thursday around 9am utc-7"
@@ -65,23 +84,6 @@ jobs:
     outputs:
       copilot_pat_number: ${{ steps.select-copilot-pat.outputs.copilot_pat_number }}
 
-runtimes:
-  dotnet:
-    version: "10.0"
-    action-version: "v5"
-  node:
-    version: "24"
-
-network:
-  allowed:
-    - defaults
-    - node
-    - dotnet
-
-tools:
-  bash: true
-  github: true
-
 # Override the COPILOT_GITHUB_TOKEN expression used in the activation job
 # Consume the PAT number from the pre-activation step and select the corresponding secret
 engine:
@@ -92,9 +94,9 @@ engine:
     COPILOT_GITHUB_TOKEN: ${{ case(needs.pre_activation.outputs.copilot_pat_number == '0', secrets.COPILOT_PAT_0, needs.pre_activation.outputs.copilot_pat_number == '1', secrets.COPILOT_PAT_1, needs.pre_activation.outputs.copilot_pat_number == '2', secrets.COPILOT_PAT_2, needs.pre_activation.outputs.copilot_pat_number == '3', secrets.COPILOT_PAT_3, needs.pre_activation.outputs.copilot_pat_number == '4', secrets.COPILOT_PAT_4, needs.pre_activation.outputs.copilot_pat_number == '5', secrets.COPILOT_PAT_5, needs.pre_activation.outputs.copilot_pat_number == '6', secrets.COPILOT_PAT_6, needs.pre_activation.outputs.copilot_pat_number == '7', secrets.COPILOT_PAT_7, needs.pre_activation.outputs.copilot_pat_number == '8', secrets.COPILOT_PAT_8, needs.pre_activation.outputs.copilot_pat_number == '9', secrets.COPILOT_PAT_9, secrets.COPILOT_GITHUB_TOKEN) }}
 ---
 
-# Weekly Conformance Tier Audit
+# Conformance Tier Audit
 
-Run the MCP SDK conformance tier audit every Thursday and publish the assessment and remediation reports to the workflow summary.
+Run the MCP SDK conformance tier audit and publish the assessment and remediation reports to the workflow summary.
 
 ## Inputs
 
