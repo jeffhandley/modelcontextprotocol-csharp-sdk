@@ -32,6 +32,7 @@ tools:
 
 safe-outputs:
   noop:
+    max: 20
     report-as-issue: false
   create-issue:
     title-prefix: "C# SDK Conformance Audit: "
@@ -158,6 +159,7 @@ Read and follow the conformance-tier-audit skill at `.github/skills/conformance-
 - **`--branch`**: `main` (always — for GitHub API checks against the upstream repo)
 - **`--framework net9.0`** for the conformance server and client
 - **`--scope`**: `${{ github.event.inputs.audit-scope || 'full' }}`
+- Because this audit can run for well over an hour, call the `noop` safe-output tool near the start of the run and again after each major milestone to keep the safe-outputs session alive. Use brief progress messages such as `Audit started`, `Server conformance complete`, `Client conformance complete`, and `Repository health evaluation complete`. Do not wait until the final report for the first safe-output call.
 - When cloning the conformance repo, use `https://github.com/${{ github.event.inputs.conformance-repo || 'modelcontextprotocol/conformance' }}.git` and checkout branch `${{ github.event.inputs.conformance-branch || 'main' }}`
 - For partial runs (`server`, `client`, `triage`, or `repo`), execute only the requested checks and skip unrelated setup. Keep the summary focused on the selected components and explicitly note which sections were intentionally skipped.
 - If client conformance is below the tier threshold, inspect the detailed client result JSON/logs before writing remediation. Distinguish confirmed behavior failures (for example `"Tool was not called by client"` or missing SSE reconnect) from conformance-client / audit-harness gaps (for example `Expected Check Missing` or `0 passed, 0 failed`, such as `initialize`). Do not prescribe SDK implementation work for the latter unless the logs show a concrete SDK exception or protocol defect.
@@ -193,6 +195,8 @@ Create a GitHub issue using the `create-issue` safe output with the same report 
 - the workflow was manually triggered and `audit-scope` is `full`
 
 If `${{ github.event_name }}` is `workflow_dispatch` and `${{ github.event.inputs.audit-scope || 'full' }}` is **not** `full`, do **not** create an issue. In that case, keep the results in the workflow summary only.
+
+For runs that should create an issue, assemble the final report body first and then call `create-issue` immediately, before any optional cleanup or teardown. If no issue should be created for the selected scope, send a final `noop` completion message instead.
 
 - For a **full** audit issue, the title must follow this structure (do **not** include the `title-prefix` — it is added automatically):
 

@@ -48,6 +48,18 @@ If the effective component set does **not** cover the full tier rubric, treat th
 - do **not** claim a final Tier 1/2/3 result unless all tier inputs were actually evaluated
 - explicitly list which sections were intentionally skipped
 
+### 0c. Keep the safe-output session alive during long runs
+
+When this skill is running inside a GitHub Agentic Workflow and the `safeoutputs` tools are available, send a brief `noop` progress update immediately after pre-flight, then again after each major milestone:
+
+- server process started and verified
+- client pre-build finished
+- server conformance finished
+- client conformance finished
+- repository-health / triage evaluation finished
+
+This audit often runs for more than an hour. These periodic `noop` calls act as keepalive heartbeats so the streamable safe-output session does not expire before the final issue is created. In this workflow, `noop.report-as-issue: false` is configured, so these heartbeat updates will not open issues.
+
 ## Step 1: Start the Conformance Server
 
 Only do this step when `runServer` is true.
@@ -206,6 +218,7 @@ For a partial audit:
 - omit or mark as intentionally skipped any sections that were not selected
 - use a scope-specific title such as `Client Conformance`, `Server Conformance`, `Issue Triage`, or `Repository Health`
 - do not state a final tier unless the run covered all inputs needed for a tier decision
+- if safe-output tools are available, send a short `noop` milestone update before and after the partial audit so the session remains active
 
 ### Windows Quoting Note
 
