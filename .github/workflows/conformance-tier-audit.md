@@ -157,13 +157,13 @@ Read and follow the conformance-tier-audit skill at `.github/skills/conformance-
 - **`--framework net9.0`** for the conformance server and client
 - **`--scope`**: `${{ github.event.inputs.audit-scope || 'full' }}`
 - When cloning the conformance repo, use `https://github.com/${{ github.event.inputs.conformance-repo || 'modelcontextprotocol/conformance' }}.git` and checkout branch `${{ github.event.inputs.conformance-branch || 'main' }}`
-- For partial runs (`server`, `client`, `triage`, or `repo`), execute only the requested checks and skip unrelated setup. Keep the summary and issue focused on the selected components and explicitly note which sections were intentionally skipped.
+- For partial runs (`server`, `client`, `triage`, or `repo`), execute only the requested checks and skip unrelated setup. Keep the summary focused on the selected components and explicitly note which sections were intentionally skipped.
 - If client conformance is below the tier threshold, inspect the detailed client result JSON/logs before writing remediation. Distinguish confirmed behavior failures (for example `"Tool was not called by client"` or missing SSE reconnect) from conformance-client / audit-harness gaps (for example `Expected Check Missing` or `0 passed, 0 failed`, such as `initialize`). Do not prescribe SDK implementation work for the latter unless the logs show a concrete SDK exception or protocol defect.
 - For issue triage, read the upstream repo's issues without integrity filtering. If scoring still cannot be computed, report the exact reason (for example rate limits, missing token, or no qualifying issues) instead of the generic phrase `GitHub auth unavailable`.
 
 **Important**: The `--repo` and `--branch` values above are for GitHub API checks (issue triage, labels, policy signals) and must always target the upstream `modelcontextprotocol/csharp-sdk` repo on `main`. The SDK source code being audited (conformance server/client) comes from the current repository checkout.
 
-### Output to Workflow Summary and Issue
+### Output to Workflow Summary and Conditional Issue
 
 Instead of writing files to `artifacts/skill-output/`, write **all** reports to the GitHub Actions step summary (`$GITHUB_STEP_SUMMARY`). This makes the reports visible directly in the workflow run summary page.
 
@@ -183,15 +183,22 @@ Write the content to `$GITHUB_STEP_SUMMARY` using bash, for example:
     echo "...assessment content..." >> "$GITHUB_STEP_SUMMARY"
     echo "</details>" >> "$GITHUB_STEP_SUMMARY"
 
-After writing the step summary, also create a GitHub issue using the `create-issue` safe output with the same report content.
+Always write the report to `$GITHUB_STEP_SUMMARY`.
 
-- For a **full** audit, the issue title must follow this structure (do **not** include the `title-prefix` — it is added automatically):
+Create a GitHub issue using the `create-issue` safe output with the same report content **only** when either of the following is true:
+
+- the workflow ran on its scheduled trigger, or
+- the workflow was manually triggered and `audit-scope` is `full`
+
+If `${{ github.event_name }}` is `workflow_dispatch` and `${{ github.event.inputs.audit-scope || 'full' }}` is **not** `full`, do **not** create an issue. In that case, keep the results in the workflow summary only.
+
+- For a **full** audit issue, the title must follow this structure (do **not** include the `title-prefix` — it is added automatically):
 
     {yyyy-MM-dd} - Tier {N}
 
 - For example: `2026-04-03 - Tier 3`
 
-- For a **partial** audit, use a scope-specific title instead, for example:
+- If a **non-full** audit ever creates an issue outside the manual-trigger exception above, use a scope-specific title instead, for example:
 
     {yyyy-MM-dd} - Client Conformance
     {yyyy-MM-dd} - Issue Triage
