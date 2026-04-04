@@ -37,7 +37,6 @@ safe-outputs:
   create-issue:
     title-prefix: "C# SDK Conformance Audit: "
     labels: [automation]
-    assignees: [jeffhandley, mikekistler]
     max: 1
     close-older-issues: true
 
@@ -380,7 +379,7 @@ Issue title (the `title-prefix` "C# SDK Conformance Audit: " is added automatica
 - **Full audit**: `{yyyy-MM-dd} - Tier {N}` (e.g., `2026-04-03 - Tier 3`)
 - **Non-full** (if an issue is ever needed): `{yyyy-MM-dd} - {Scope Label}` (e.g., `2026-04-03 - Client Conformance`)
 
-The issue body is the same content written to `step-summary.md`. The `create-issue` metadata in the frontmatter ensures the **automation** label and assignees (**jeffhandley**, **mikekistler**) are applied automatically.
+The issue body is the same content written to `step-summary.md`. The `create-issue` metadata in the frontmatter ensures the **automation** label is applied automatically.
 
 ### Step 8 — Cleanup
 
