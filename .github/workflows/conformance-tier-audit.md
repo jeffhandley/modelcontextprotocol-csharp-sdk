@@ -37,7 +37,7 @@ safe-outputs:
   create-issue:
     title-prefix: "C# SDK Conformance Audit: "
     labels: [automation]
-    assignees: [jeffhandley]
+    assignees: [jeffhandley, mikekistler]
     max: 1
     close-older-issues: true
 
@@ -179,6 +179,8 @@ Read and follow the conformance-tier-audit skill at `.github/skills/conformance-
 - For partial runs (`server`, `client`, `triage`, or `repo`), execute only the requested checks and skip unrelated setup. Keep the summary focused on the selected components and explicitly note which sections were intentionally skipped.
 - If client conformance is below the tier threshold, inspect the detailed client result JSON/logs before writing remediation. Distinguish confirmed behavior failures (for example `"Tool was not called by client"` or missing SSE reconnect) from conformance-client / audit-harness gaps (for example `Expected Check Missing` or `0 passed, 0 failed`, such as `initialize`). Do not prescribe SDK implementation work for the latter unless the logs show a concrete SDK exception or protocol defect.
 - For issue triage, use the resolved `--repo` value above. To determine Tier 1 first-label timing, query that repo's public GitHub issue-events API directly from `bash` and compute the earliest `labeled` event timestamp for each issue. If technical issues still prevent exact scoring after retry/backoff, assume Tier 1 triage is achieved but mark it with a warning signal such as `⚠` and explain the data limitation briefly instead of labeling it uncertain or using the generic phrase `GitHub auth unavailable`.
+- In any **Path to Tier 1** or issue-triage remediation section, list only **currently open issues** that still need action. Closed issues may be mentioned as historical context, but they must not appear as outstanding remediation items or links the maintainer still needs to resolve.
+- The created audit issue should rely on the default `create_issue` metadata above so it carries the **automation** label and is assigned to both `jeffhandley` and `mikekistler`.
 
 ### Output to Workflow Summary and Conditional Issue
 

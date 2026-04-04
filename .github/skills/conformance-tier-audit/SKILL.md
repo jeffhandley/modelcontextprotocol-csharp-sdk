@@ -230,6 +230,8 @@ Do **not** mark Tier 1 triage as uncertain merely because the workflow is runnin
 
 If `tier-check` does not emit enough timing detail for the Tier 1 SLA, use public GitHub REST reads against the selected repo's issue-events endpoint to determine when the first triage label was applied, and use those timestamps in the report. If those reads hit rate limits, wait and retry while sending `noop` keepalives as described above. If the technical limitation persists after retry, report Tier 1 triage as achieved with a warning indicator rather than leaving it uncertain.
 
+When writing the repo-health remediation or **Path to Tier 1** section, distinguish between historical misses and current action items. Only **open issues** that still need triage or labeling should be listed as outstanding remediation. Do not include closed issues in the remaining-action list, even if they were triaged late.
+
 #### Documentation and policy evaluation
 
 When `runDocs` or `runPolicies` is true, evaluate only those sections from the local checkout. Reuse the documentation and policy evaluation guidance from `mcp-sdk-tier-audit`, but skip them entirely when they are not selected.
