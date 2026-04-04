@@ -32,7 +32,7 @@ tools:
 
 safe-outputs:
   noop:
-    max: 20
+    max: 60
     report-as-issue: false
   create-issue:
     title-prefix: "C# SDK Conformance Audit: "
@@ -40,6 +40,17 @@ safe-outputs:
     assignees: [jeffhandley]
     max: 1
     close-older-issues: true
+
+post-steps:
+  - name: Publish conformance report to workflow summary
+    if: always()
+    shell: bash
+    run: |
+      report_path="${GITHUB_WORKSPACE}/artifacts/skill-output/step-summary.md"
+      if [ -f "$report_path" ]; then
+        printf '\n' >> "$GITHUB_STEP_SUMMARY"
+        cat "$report_path" >> "$GITHUB_STEP_SUMMARY"
+      fi
 
 timeout-minutes: 240
 
@@ -60,6 +71,11 @@ on:
           - client
           - triage
           - repo
+      repo:
+        description: 'Repository to evaluate for repo-health checks (owner/repo)'
+        required: false
+        type: string
+        default: 'modelcontextprotocol/csharp-sdk'
       conformance-repo:
         description: 'Conformance repo to clone (org/repo)'
         required: false
@@ -135,10 +151,9 @@ These values are configurable via `workflow_dispatch` inputs. On scheduled runs,
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `audit-scope` | `full` | Preset subset to run: `full`, `tests`, `server`, `client`, `triage`, or `repo` |
+| `repo` | `modelcontextprotocol/csharp-sdk` | Repository to use for issue triage, labels, and repo-health checks |
 | `conformance-repo` | `modelcontextprotocol/conformance` | The conformance repo to clone |
 | `conformance-branch` | `main` | The conformance repo branch to clone |
-
-The workflow always uses `modelcontextprotocol/csharp-sdk` with branch `main` for issue triage, labels, and policy checks — regardless of which fork or branch the workflow runs on. The SDK source code is taken from the current repository and branch (selectable via workflow_dispatch's native branch picker).
 
 ### Scope presets
 
@@ -155,21 +170,19 @@ The workflow always uses `modelcontextprotocol/csharp-sdk` with branch `main` fo
 
 Read and follow the conformance-tier-audit skill at `.github/skills/conformance-tier-audit/SKILL.md`. Use these parameter overrides:
 
-- **`--repo`**: `modelcontextprotocol/csharp-sdk` (always — for issue triage, labels, policy signals)
-- **`--branch`**: `main` (always — for GitHub API checks against the upstream repo)
+- **`--repo`**: `${{ github.event.inputs.repo || 'modelcontextprotocol/csharp-sdk' }}`
 - **`--framework net9.0`** for the conformance server and client
 - **`--scope`**: `${{ github.event.inputs.audit-scope || 'full' }}`
 - Because this audit can run for well over an hour, call the `noop` safe-output tool near the start of the run and again after each major milestone to keep the safe-outputs session alive. Use brief progress messages such as `Audit started`, `Server conformance complete`, `Client conformance complete`, and `Repository health evaluation complete`. Do not wait until the final report for the first safe-output call.
+- If public GitHub issue-event reads return a rate-limit response (`403`/`429`, `Retry-After`, or `X-RateLimit-Remaining: 0`), pause until the reset time, send a brief `noop` keepalive every 30-60 seconds while waiting, then resume the audit and retry the request.
 - When cloning the conformance repo, use `https://github.com/${{ github.event.inputs.conformance-repo || 'modelcontextprotocol/conformance' }}.git` and checkout branch `${{ github.event.inputs.conformance-branch || 'main' }}`
 - For partial runs (`server`, `client`, `triage`, or `repo`), execute only the requested checks and skip unrelated setup. Keep the summary focused on the selected components and explicitly note which sections were intentionally skipped.
 - If client conformance is below the tier threshold, inspect the detailed client result JSON/logs before writing remediation. Distinguish confirmed behavior failures (for example `"Tool was not called by client"` or missing SSE reconnect) from conformance-client / audit-harness gaps (for example `Expected Check Missing` or `0 passed, 0 failed`, such as `initialize`). Do not prescribe SDK implementation work for the latter unless the logs show a concrete SDK exception or protocol defect.
-- For issue triage, read the upstream repo's issues without integrity filtering. If scoring still cannot be computed, report the exact reason (for example rate limits, missing token, or no qualifying issues) instead of the generic phrase `GitHub auth unavailable`.
-
-**Important**: The `--repo` and `--branch` values above are for GitHub API checks (issue triage, labels, policy signals) and must always target the upstream `modelcontextprotocol/csharp-sdk` repo on `main`. The SDK source code being audited (conformance server/client) comes from the current repository checkout.
+- For issue triage, use the resolved `--repo` value above. To determine Tier 1 first-label timing, query that repo's public GitHub issue-events API directly from `bash` and compute the earliest `labeled` event timestamp for each issue. If technical issues still prevent exact scoring after retry/backoff, assume Tier 1 triage is achieved but mark it with a warning signal such as `⚠` and explain the data limitation briefly instead of labeling it uncertain or using the generic phrase `GitHub auth unavailable`.
 
 ### Output to Workflow Summary and Conditional Issue
 
-Instead of writing files to `artifacts/skill-output/`, write **all** reports to the GitHub Actions step summary (`$GITHUB_STEP_SUMMARY`). This makes the reports visible directly in the workflow run summary page.
+Write the canonical report to `artifacts/skill-output/step-summary.md`. The workflow has a post-step that appends this file to the GitHub Actions step summary (`$GITHUB_STEP_SUMMARY`) outside the sandbox so the report is visible on the workflow run summary page.
 
 Format the step summary as:
 
@@ -177,17 +190,19 @@ Format the step summary as:
 2. **Full assessment report** in a collapsible `<details>` block with a 📋 prefix
 3. **Full remediation report** in a separate collapsible `<details>` block with a 🔧 prefix
 
-Write the content to `$GITHUB_STEP_SUMMARY` using bash, for example:
+Build the content in `artifacts/skill-output/step-summary.md` using bash, for example:
 
-    echo "# Conformance Tier Audit — C# MCP SDK" >> "$GITHUB_STEP_SUMMARY"
-    echo "" >> "$GITHUB_STEP_SUMMARY"
-    echo "## Executive Summary" >> "$GITHUB_STEP_SUMMARY"
-    echo "...tables and tier result..." >> "$GITHUB_STEP_SUMMARY"
-    echo "<details><summary>📋 Full Assessment Report</summary>" >> "$GITHUB_STEP_SUMMARY"
-    echo "...assessment content..." >> "$GITHUB_STEP_SUMMARY"
-    echo "</details>" >> "$GITHUB_STEP_SUMMARY"
+    mkdir -p artifacts/skill-output
+    report_path="artifacts/skill-output/step-summary.md"
+    echo "# Conformance Tier Audit — C# MCP SDK" >> "$report_path"
+    echo "" >> "$report_path"
+    echo "## Executive Summary" >> "$report_path"
+    echo "...tables and tier result..." >> "$report_path"
+    echo "<details><summary>📋 Full Assessment Report</summary>" >> "$report_path"
+    echo "...assessment content..." >> "$report_path"
+    echo "</details>" >> "$report_path"
 
-Always write the report to `$GITHUB_STEP_SUMMARY`.
+If `$GITHUB_STEP_SUMMARY` is writable from inside the agent, you may append the same file there as well, but do **not** treat that as the primary path.
 
 Create a GitHub issue using the `create-issue` safe output with the same report content **only** when either of the following is true:
 

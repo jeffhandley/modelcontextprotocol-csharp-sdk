@@ -4,7 +4,7 @@ description: >-
   Run an MCP SDK conformance tier audit for the C# MCP SDK. Starts the conformance server,
   pre-builds the conformance client, clones the conformance repo, and delegates
   to its mcp-sdk-tier-audit skill for all evaluation and reporting.
-argument-hint: '[--port <port>] [--framework <tfm>] [--branch <branch>] [--scope <scope>]'
+argument-hint: '[--repo <owner/repo>] [--port <port>] [--framework <tfm>] [--scope <scope>]'
 compatibility: >-
   Requires: Node.js >= 20, .NET SDK (net9.0+),
   and internet access to clone the github.com/modelcontextprotocol/conformance repo.
@@ -20,9 +20,9 @@ This skill orchestrates a tier audit by preparing the C# SDK's conformance serve
 
 Extract optional overrides from the user's input (all have defaults):
 
+- **repo** (default: current repository): Repository to use for issue triage, labels, and repo-health checks
 - **port** (default: `3001`): Port for the conformance server
 - **framework** (default: `net9.0`): Target framework for `dotnet run`. Available: `net8.0`, `net9.0`, `net10.0`
-- **branch** (default: current branch): Git branch for GitHub API checks. Derive from: `git rev-parse --abbrev-ref HEAD`
 - **scope** (default: `full`): Preset subset to run. Supported values: `full`, `tests`, `server`, `client`, `triage`, `repo`
 
 ### 0b. Resolve the effective component set
@@ -59,6 +59,27 @@ When this skill is running inside a GitHub Agentic Workflow and the `safeoutputs
 - repository-health / triage evaluation finished
 
 This audit often runs for more than an hour. These periodic `noop` calls act as keepalive heartbeats so the streamable safe-output session does not expire before the final issue is created. In this workflow, `noop.report-as-issue: false` is configured, so these heartbeat updates will not open issues.
+
+### 0d. Prepare issue-event reads for triage timing
+
+When issue-triage or repository-health checks are in scope, use the resolved `repo` value from `--repo` and compute Tier 1 first-label timing from that repo's public GitHub issue-events API. Use `bash` plus the public REST API to fetch issue events for each relevant issue, for example:
+
+```bash
+curl -fsSL \
+  -H "Accept: application/vnd.github+json" \
+  "https://api.github.com/repos/<owner/repo>/issues/<issue-number>/events?per_page=100"
+```
+
+From that response, identify the earliest `labeled` event timestamp for the issue and compare it to the issue's `created_at` timestamp to measure the Tier 1 two-business-day triage SLA.
+
+If the public API is rate-limited:
+
+1. inspect `Retry-After` and `X-RateLimit-Reset`
+2. pause until the reset window
+3. if `safeoutputs.noop` is available, send a brief keepalive every 30-60 seconds while waiting, such as `Waiting for GitHub issue-events rate limit reset`
+4. retry the request after the wait
+
+If the needed event history is still unavailable after this backoff/retry flow, assume Tier 1 triage is achieved but show it with a warning signal such as `⚠` and report the exact technical limitation that prevented precise timing.
 
 ## Step 1: Start the Conformance Server
 
@@ -146,8 +167,7 @@ If the effective component set is the full default set, follow that skill's inst
 
 | Input | Value |
 |-------|-------|
-| `--repo` | `modelcontextprotocol/csharp-sdk` |
-| `--branch` | `<branch>` |
+| `--repo` | `<owner/repo>` |
 | `--conformance-server-url` | `http://localhost:<port>` |
 | `--client-cmd` | See platform-specific commands below |
 
@@ -189,11 +209,11 @@ Use the same `<client-cmd>` shown above, including `--no-build` and the scenario
 
 #### Issue triage, labels, and repository-health signals
 
-When any of `runIssueTriage`, `runLabels`, `runPolicies`, or `runReleases` is true, use the deterministic `tier-check` CLI without conformance execution:
+When any of `runIssueTriage`, `runLabels`, `runPolicies`, or `runReleases` is true, use the deterministic `tier-check` CLI without conformance execution where it is sufficient, and supplement it with direct public GitHub issue-events reads when you need exact first-label timing:
 
 ```bash
 cd "$conformanceDir"
-npm run --silent tier-check -- --repo <owner/repo> --branch <branch> --skip-conformance --output json
+npm run --silent tier-check -- --repo <owner/repo> --skip-conformance --output json
 ```
 
 Use these narrower commands when only a single section is needed:
@@ -205,6 +225,10 @@ npm run --silent tier-check -- triage --repo <owner/repo> --days 30
 # Labels only
 npm run --silent tier-check -- labels --repo <owner/repo>
 ```
+
+Do **not** mark Tier 1 triage as uncertain merely because the workflow is running from a fork or because `--repo` points at a different repository than the current checkout.
+
+If `tier-check` does not emit enough timing detail for the Tier 1 SLA, use public GitHub REST reads against the selected repo's issue-events endpoint to determine when the first triage label was applied, and use those timestamps in the report. If those reads hit rate limits, wait and retry while sending `noop` keepalives as described above. If the technical limitation persists after retry, report Tier 1 triage as achieved with a warning indicator rather than leaving it uncertain.
 
 #### Documentation and policy evaluation
 
@@ -245,6 +269,12 @@ node dist/index.js client \
 ### Output Location Override
 
 The conformance skill may specify its own output location. Override it: write all output files to `artifacts/skill-output/` at the SDK repo root. Create the directory if it doesn't exist. The `artifacts/` directory is already gitignored.
+
+Use `artifacts/skill-output/step-summary.md` as the canonical final report file. Populate that file first, then:
+
+- call `create_issue` with the same markdown body when the workflow should publish an issue
+- optionally append the file to `$GITHUB_STEP_SUMMARY` if it is writable
+
 
 ## Step 5: Cleanup
 
