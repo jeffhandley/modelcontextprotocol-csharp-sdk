@@ -4,7 +4,7 @@ description: >-
   Run an MCP SDK conformance tier audit for the C# MCP SDK. Starts the conformance server,
   pre-builds the conformance client, clones the conformance repo, and delegates
   to its mcp-sdk-tier-audit skill for all evaluation and reporting.
-argument-hint: '[--port <port>] [--framework <tfm>] [--branch <branch>]'
+argument-hint: '[--port <port>] [--framework <tfm>] [--branch <branch>] [--scope <scope>]'
 compatibility: >-
   Requires: Node.js >= 20, .NET SDK (net9.0+),
   and internet access to clone the github.com/modelcontextprotocol/conformance repo.
@@ -23,8 +23,34 @@ Extract optional overrides from the user's input (all have defaults):
 - **port** (default: `3001`): Port for the conformance server
 - **framework** (default: `net9.0`): Target framework for `dotnet run`. Available: `net8.0`, `net9.0`, `net10.0`
 - **branch** (default: current branch): Git branch for GitHub API checks. Derive from: `git rev-parse --abbrev-ref HEAD`
+- **scope** (default: `full`): Preset subset to run. Supported values: `full`, `tests`, `server`, `client`, `triage`, `repo`
+
+### 0b. Resolve the effective component set
+
+Expand `scope` as follows:
+
+| Scope | Components |
+|-------|------------|
+| `full` | `server`, `client`, `issue-triage`, `labels`, `docs`, `policies`, `releases` |
+| `tests` | `server`, `client` |
+| `server` | `server` |
+| `client` | `client` |
+| `triage` | `issue-triage` |
+| `repo` | `issue-triage`, `labels`, `docs`, `policies`, `releases` |
+
+Normalize the selection into booleans such as `runServer`, `runClient`, `runIssueTriage`, `runLabels`, `runDocs`, `runPolicies`, and `runReleases`.
+
+If the effective component set does **not** cover the full tier rubric, treat the run as a **partial audit**:
+
+- run only the selected checks
+- skip unrelated setup and evaluation work
+- keep the report focused on the chosen sections
+- do **not** claim a final Tier 1/2/3 result unless all tier inputs were actually evaluated
+- explicitly list which sections were intentionally skipped
 
 ## Step 1: Start the Conformance Server
+
+Only do this step when `runServer` is true.
 
 Start the C# SDK's conformance server as a detached background process from the SDK root (the cwd):
 
@@ -54,6 +80,8 @@ If the server fails to start, check stderr for build errors. Common issues:
 
 ## Step 2: Pre-build the Conformance Client
 
+Only do this step when `runClient` is true.
+
 **CRITICAL**: Pre-build the conformance client before the audit runs tests. The conformance runner executes 26 scenarios in parallel — without pre-building, each `dotnet run` invocation triggers a full compilation, causing massive CPU contention and 30-second timeouts.
 
 **PowerShell** (Windows):
@@ -67,6 +95,8 @@ dotnet build tests/ModelContextProtocol.ConformanceClient --framework <framework
 ```
 
 ## Step 3: Clone the Conformance Repo
+
+Do this step whenever you need the conformance CLI or the `mcp-sdk-tier-audit` reference skill — typically for `server`, `client`, `issue-triage`, `labels`, or `releases`.
 
 Clone the conformance repo to a temporary directory and build it:
 
@@ -90,7 +120,7 @@ npm run build
 
 Store the conformance directory path for cleanup later.
 
-## Step 4: Delegate to the Conformance Repo's Audit Skill
+## Step 4: Run the Requested Audit Components
 
 Read the `mcp-sdk-tier-audit` skill from the cloned conformance repo:
 
@@ -98,7 +128,9 @@ Read the `mcp-sdk-tier-audit` skill from the cloned conformance repo:
 $conformanceDir/.claude/skills/mcp-sdk-tier-audit/SKILL.md
 ```
 
-Follow that skill's instructions end-to-end, providing these inputs:
+### 4a. Full audit
+
+If the effective component set is the full default set, follow that skill's instructions end-to-end, providing these inputs:
 
 | Input | Value |
 |-------|-------|
@@ -118,6 +150,62 @@ dotnet run --project <sdk-path>\tests\ModelContextProtocol.ConformanceClient --f
 ```
 dotnet run --project <sdk-path>/tests/ModelContextProtocol.ConformanceClient --framework <framework> -p:NuGetAudit=false --no-build -- $MCP_CONFORMANCE_SCENARIO
 ```
+
+### 4b. Partial audit
+
+If the run selects only a subset of components, do **not** execute the full end-to-end tier workflow. Instead, run just the relevant pieces below and produce a targeted report.
+
+#### Server conformance only
+
+When `runServer` is true, run the server suite directly:
+
+```bash
+cd "$conformanceDir"
+node dist/index.js server --url http://localhost:<port> --suite all -o <output-dir>/server-results
+```
+
+#### Client conformance only
+
+When `runClient` is true, run the client suite directly:
+
+```bash
+cd "$conformanceDir"
+node dist/index.js client --command "<client-cmd>" --suite all -o <output-dir>/client-results
+```
+
+Use the same `<client-cmd>` shown above, including `--no-build` and the scenario environment variable expansion.
+
+#### Issue triage, labels, and repository-health signals
+
+When any of `runIssueTriage`, `runLabels`, `runPolicies`, or `runReleases` is true, use the deterministic `tier-check` CLI without conformance execution:
+
+```bash
+cd "$conformanceDir"
+npm run --silent tier-check -- --repo <owner/repo> --branch <branch> --skip-conformance --output json
+```
+
+Use these narrower commands when only a single section is needed:
+
+```bash
+# Issue triage only
+npm run --silent tier-check -- triage --repo <owner/repo> --days 30
+
+# Labels only
+npm run --silent tier-check -- labels --repo <owner/repo>
+```
+
+#### Documentation and policy evaluation
+
+When `runDocs` or `runPolicies` is true, evaluate only those sections from the local checkout. Reuse the documentation and policy evaluation guidance from `mcp-sdk-tier-audit`, but skip them entirely when they are not selected.
+
+### 4c. Reporting rules for partial runs
+
+For a partial audit:
+
+- summarize only the requested components
+- omit or mark as intentionally skipped any sections that were not selected
+- use a scope-specific title such as `Client Conformance`, `Server Conformance`, `Issue Triage`, or `Repository Health`
+- do not state a final tier unless the run covered all inputs needed for a tier decision
 
 ### Windows Quoting Note
 
@@ -170,4 +258,11 @@ rm -rf "$conformanceDir"
 
 # Specific branch for GitHub API checks
 /conformance-tier-audit --branch main
+
+# Only run client conformance
+/conformance-tier-audit --scope client
+
+# Only perform issue triage
+/conformance-tier-audit --scope triage
+
 ```
