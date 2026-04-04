@@ -31,6 +31,8 @@ tools:
     min-integrity: none
 
 safe-outputs:
+  noop:
+    report-as-issue: false
   create-issue:
     title-prefix: "C# SDK Conformance Audit: "
     labels: [automation]
