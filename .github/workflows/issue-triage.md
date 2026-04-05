@@ -158,28 +158,49 @@ Use the current New York date when computing the report title:
 REPORT_DATE=$(TZ=America/New_York date +%F)
 ```
 
-Set `TO_TRIAGE_COUNT` to the number of open issues that still need triage under the skill's classification rules. The `title` value you pass to `create-issue` or `update-issue` must be:
+Set `TO_TRIAGE_COUNT` to the number of open issues that still need triage under the skill's classification rules.
+
+When you call `create-issue`, pass only the date and count as the `title`:
 
 ```text
 yyyy-MM-dd (N to triage)
 ```
 
-When you call `create-issue` or `update-issue`, pass exactly that value as the `title` and nothing else. The workflow's `title-prefix` setting will automatically prepend `[C# SDK Issue Triage] ` to the final GitHub issue title. Do **not** include the prefix yourself, and do **not** include `Issue Triage Report`, `Report`, an em dash, or any extra words.
+The workflow's `title-prefix` setting for `create-issue` will automatically prepend `[C# SDK Issue Triage] ` to produce the final issue title. Do **not** include the prefix yourself when calling `create-issue`.
+
+When you call `update-issue`, the `title-prefix` setting is used only for **matching** the target issue — it does **not** auto-prepend. You must pass the **full** title including the prefix:
+
+```text
+[C# SDK Issue Triage] yyyy-MM-dd (N to triage)
+```
+
+Do **not** include `Issue Triage Report`, `Report`, an em dash, or any extra words in either case.
 
 ## Publishing rules
 
-Search the workflow repository where this workflow is running for an existing open issue whose title starts with `[C# SDK Issue Triage] `. If more than one exists, update the most recently updated open issue that matches the prefix.
+Search the workflow repository where this workflow is running for an existing open issue whose title starts with `[C# SDK Issue Triage] `. If more than one exists, use the most recently updated open issue that matches the prefix. Record the issue number for use in the publishing step below.
+
+### Incorporating the existing triage issue
+
+When a matching open issue is found and the output mode is `Create Issue`, read the existing issue's body and all of its comments **before** running the triage skill. Pass that content to the skill as prior-run context so it can:
+
+- Note trends (new issues since last run, issues that were resolved, recurring themes).
+- Incorporate any maintainer comments on the triage issue as guidance (e.g., "we plan to close #42 next sprint").
+- Avoid repeating assessments that haven't changed unless there is new information.
 
 ### If `OUTPUT_MODE` is `Create Issue`
 
-- If a matching open issue already exists, use `update-issue` with:
-  - the matching issue number;
-  - `operation: replace`;
-  - the recomputed title for the current run, using only `yyyy-MM-dd (N to triage)`; the workflow will prepend `[C# SDK Issue Triage] ` automatically; and
-  - the exact contents of `/tmp/issue-triage-report.md` as the body.
-- If no matching open issue exists, use `create-issue` with:
-  - the recomputed title for the current run, using only `yyyy-MM-dd (N to triage)`; the workflow will prepend `[C# SDK Issue Triage] ` automatically; and
-  - the exact contents of `/tmp/issue-triage-report.md` as the body.
+1. **If a matching open issue exists, try `update-issue` first:**
+   - Use the matching issue number.
+   - Set `operation: replace`.
+   - Set the title to the full value **including** the prefix: `[C# SDK Issue Triage] yyyy-MM-dd (N to triage)`. The `update-issue` tool does **not** auto-prepend the prefix.
+   - Set the body to the exact contents of `/tmp/issue-triage-report.md`.
+   - If `update-issue` **succeeds**, publishing is done.
+   - If `update-issue` **fails** (e.g., the issue was closed between the search and the update), fall through to step 2.
+2. **If no matching open issue exists, or if `update-issue` failed:**
+   - Use `create-issue` with:
+     - the title using only `yyyy-MM-dd (N to triage)` (the `create-issue` tool auto-prepends the prefix); and
+     - the exact contents of `/tmp/issue-triage-report.md` as the body.
 
 Do not use comments for the report. Keep the report in the issue body itself.
 
