@@ -17,7 +17,7 @@ This is a **dispatcher agent** that routes your request to the appropriate speci
 - **Upgrading workflows**: Routes to `upgrade-agentic-workflows` prompt
 - **Creating report-generating workflows**: Routes to `report` prompt — consult this whenever the workflow posts status updates, audits, analyses, or any structured output as issues, discussions, or comments
 - **Creating shared components**: Routes to `create-shared-agentic-workflow` prompt
-- **Fixing Dependabot PRs**: Routes to `dependabot` prompt — use this when Dependabot opens PRs that modify generated manifest files (`.github/workflows/package.json`, `.github/workflows/requirements.txt`, `.github/workflows/go.mod`). Never merge those PRs directly; instead update the source `.md` files and rerun `gh aw compile --dependabot` to bundle all fixes
+- **Fixing Dependabot PRs**: Routes to `dependabot` prompt — use this when Dependabot opens PRs that modify generated manifest files (`.github/workflows/package.json`, `.github/workflows/requirements.txt`, `.github/workflows/go.mod`). Never merge those PRs directly; instead update the source `.md` files and rerun `gh aw compile --dependabot --schedule-seed modelcontextprotocol/csharp-sdk` to bundle all fixes
 - **Analyzing test coverage**: Routes to `test-coverage` prompt — consult this whenever the workflow reads, analyzes, or reports on test coverage data from PRs or CI runs
 
 Workflows may optionally include:
@@ -144,8 +144,8 @@ When a user interacts with you:
 # Initialize repository for agentic workflows
 gh aw init
 
-# Generate the lock file for a workflow
-gh aw compile [workflow-name]
+# Generate the lock file for a workflow in this repository
+gh aw compile [workflow-name] --schedule-seed modelcontextprotocol/csharp-sdk
 
 # Debug workflow runs
 gh aw logs [workflow-name]
@@ -153,7 +153,7 @@ gh aw audit <run-id>
 
 # Upgrade workflows
 gh aw fix --write
-gh aw compile --validate
+gh aw compile --validate --schedule-seed modelcontextprotocol/csharp-sdk
 ```
 
 ## Key Features of gh-aw
@@ -172,6 +172,7 @@ gh aw compile --validate
 - Always reference the instructions file at https://github.com/github/gh-aw/blob/v0.66.1/.github/aw/github-agentic-workflows.md for complete documentation
 - Use the MCP tool `agentic-workflows` when running in GitHub Copilot Cloud
 - Workflows must be compiled to `.lock.yml` files before running in GitHub Actions
+- In this repository, **always** pass `--schedule-seed modelcontextprotocol/csharp-sdk` when running `gh aw compile` so scheduled workflows keep their intended scattered cron slots stable across recompiles
 - **Bash tools are enabled by default** - Don't restrict bash commands unnecessarily since workflows are sandboxed by the AWF
 - Follow security best practices: minimal permissions, explicit network access, no template injection
 - **Network configuration**: Use ecosystem identifiers (`node`, `python`, `go`, etc.) or explicit FQDNs in `network.allowed`. Bare shorthands like `npm` or `pypi` are **not** valid. See https://github.com/github/gh-aw/blob/v0.66.1/.github/aw/network.md for the full list of valid ecosystem identifiers and domain patterns.
