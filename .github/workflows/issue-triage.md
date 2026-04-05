@@ -174,18 +174,23 @@ When you call `update-issue`, the `title-prefix` setting is used only for **matc
 [C# SDK Issue Triage] yyyy-MM-dd (N to triage)
 ```
 
+> ⚠️ **Critical: `create-issue` and `update-issue` handle the prefix differently.**
+> - `create-issue` **auto-prepends** the prefix → pass only the date/count portion.
+> - `update-issue` does **NOT** auto-prepend → you **must** include `[C# SDK Issue Triage] ` at the start of the title yourself.
+> Failing to include the prefix when calling `update-issue` will strip it from the issue title.
+
 Do **not** include `Issue Triage Report`, `Report`, an em dash, or any extra words in either case.
 
 ## Publishing rules
 
-Search the workflow repository where this workflow is running for an existing open issue whose title starts with `[C# SDK Issue Triage] `. If more than one exists, use the most recently updated open issue that matches the prefix. Record the issue number for use in the publishing step below.
+Search the workflow repository (where this workflow is running — which may be a fork, a side repo, or `modelcontextprotocol/csharp-sdk` itself) for triage report issues whose title starts with `[C# SDK Issue Triage] `. Search both open **and** closed issues created within the last **4 weeks**. Record all matching issues for prior-run context. If there is a currently open matching issue, record its number for the publishing step below.
 
-### Incorporating the existing triage issue
+### Incorporating prior triage reports
 
-When a matching open issue is found and the output mode is `Create Issue`, read the existing issue's body and all of its comments **before** running the triage skill. Pass that content to the skill as prior-run context so it can:
+When matching triage report issues are found (open or closed, from the last 4 weeks) and the output mode is `Create Issue`, read each issue's body and all of its comments **before** running the triage skill. Pass that content to the skill as prior-run context so it can:
 
-- Note trends (new issues since last run, issues that were resolved, recurring themes).
-- Incorporate any maintainer comments on the triage issue as guidance (e.g., "we plan to close #42 next sprint").
+- Note trends (new issues since last run, issues that were resolved, recurring themes) across the 4-week window.
+- Incorporate any maintainer comments on the triage issues as guidance (e.g., "we plan to close #42 next sprint").
 - Avoid repeating assessments that haven't changed unless there is new information.
 
 ### If `OUTPUT_MODE` is `Create Issue`
@@ -225,6 +230,8 @@ If triage fails at any point, or if you cannot produce `/tmp/issue-triage-report
 - Never publish the report as a comment.
 - When the output mode is `Action Summary`, never create a noop issue and never touch any existing report issue.
 - Use the skill's output as the published content verbatim.
+- Always include the `[C# SDK Issue Triage] ` prefix when calling `update-issue`. The prefix is only auto-prepended by `create-issue`.
+- Exclude issues labeled `automation` from the triage data set; they are not part of the SDK issue backlog.
 
 ## Usage
 
