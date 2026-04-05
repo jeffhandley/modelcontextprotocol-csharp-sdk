@@ -25,8 +25,11 @@ The report follows a **BLUF (Bottom Line Up Front)** pattern — the most critic
 
 ## BLUF (Bottom Line Up Front)
 
-{2-4 sentences: total open issues, SLA compliance status, number of issues needing
-urgent attention, top finding. This is what a busy maintainer reads first.}
+- **Open issues:** {N} total ({N} triaged, {N} untriaged)
+- **SLA compliance:** {compliant | N violations} — {brief status}
+- **Urgent attention:** {N} issues need immediate action
+- **Top finding:** {single most important takeaway}
+- **Trend:** {compared to last report: improving / stable / declining}
 
 ---
 
