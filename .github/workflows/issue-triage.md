@@ -183,7 +183,7 @@ Do **not** include `Issue Triage Report`, `Report`, an em dash, or any extra wor
 
 ## Publishing rules
 
-Search the workflow repository (where this workflow is running — which may be a fork, a side repo, or `modelcontextprotocol/csharp-sdk` itself) for triage report issues whose title starts with `[C# SDK Issue Triage] `. Search both open **and** closed issues created within the last **4 weeks**. Record all matching issues for prior-run context. If there is a currently open matching issue, record its number for the publishing step below.
+Search the workflow repository (where this workflow is running — which may be a fork, a side repo, or `modelcontextprotocol/csharp-sdk` itself) for triage report issues whose title starts with `[C# SDK Issue Triage] `. Search both open **and** closed issues created or updated within the last **4 weeks**. Record all matching issues for prior-run context. If there is a currently open matching issue, record its number for the publishing step below.
 
 ### Incorporating prior triage reports
 

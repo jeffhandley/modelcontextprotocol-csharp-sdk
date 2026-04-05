@@ -37,7 +37,7 @@ Extract the Tier 1 requirements — triage SLA, critical bug SLA, label definiti
 
 ### Step 2: Gather Prior Triage Reports
 
-Search the **workflow repository** (where this workflow is running) for triage report issues — both open **and** closed — whose title starts with `[C# SDK Issue Triage] ` and that were created within the last **4 weeks**. The workflow repository may be a fork or side repo, or it may be `modelcontextprotocol/csharp-sdk` itself; search whichever repo this workflow is running in.
+Search the **workflow repository** (where this workflow is running) for triage report issues — both open **and** closed — whose title starts with `[C# SDK Issue Triage] ` and that were created or updated within the last **4 weeks**. The workflow repository may be a fork or side repo, or it may be `modelcontextprotocol/csharp-sdk` itself; search whichever repo this workflow is running in.
 
 For each matching issue found:
 
@@ -69,7 +69,7 @@ Paginate through all open issues in `modelcontextprotocol/csharp-sdk` (always th
 
 ### Step 4: Fetch Recent Pull Requests
 
-Fetch open **and** recently closed/merged pull requests from `modelcontextprotocol/csharp-sdk` (always the upstream repo). Include PRs updated within the last 4 weeks. For each PR, capture:
+Fetch open **and** recently closed/merged pull requests from `modelcontextprotocol/csharp-sdk` (always the upstream repo). Include PRs that were merged or updated within the last 4 weeks. For each PR, capture:
 - Number, title, state (open, closed, merged)
 - Linked issues (from the PR body, e.g., "Fixes #N", "Closes #N", "Resolves #N")
 - Merge date (if merged)
