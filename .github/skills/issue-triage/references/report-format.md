@@ -25,8 +25,11 @@ The report follows a **BLUF (Bottom Line Up Front)** pattern — the most critic
 
 ## BLUF (Bottom Line Up Front)
 
-{2-4 sentences: total open issues, SLA compliance status, number of issues needing
-urgent attention, top finding. This is what a busy maintainer reads first.}
+- **Open issues:** {N} total ({N} triaged, {N} untriaged)
+- **SLA compliance:** {compliant | N violations} — {brief status}
+- **Urgent attention:** {N} issues need immediate action
+- **Top finding:** {single most important takeaway}
+- **Recently closed:** {N} in last 7d, {N} in last 14d, {N} in last 28d
 
 ---
 
@@ -80,6 +83,19 @@ to close if no response.}
 
 ---
 
+## 🔗 Potentially Related PRs
+
+{Compact table of semantic PR-issue matches from Step 4 that are NOT already captured by
+explicit links. Only include high and medium confidence matches.}
+
+| # | Issue Title | PR | PR Title | Confidence | Suggested Action |
+|---|---|---|---|---|---|
+| [#N](url) | {Issue title} | [#N](url) | {PR title} | High / Medium | Verify and link / Review for relevance |
+
+{Omit this section entirely if there are no semantic matches to report.}
+
+---
+
 ## 🔗 Cross-SDK Related Issues
 
 {Themed tables mapping C# SDK issues to related issues in other MCP SDK repos.
@@ -116,9 +132,24 @@ Group by theme: OAuth, SSE, Streamable HTTP, Structured Content, Tasks, etc.}
 
 ---
 
-## 📝 SDK Tier Requirements Checklist
+## 📈 Recently Closed Issues
 
-{Table: each tier requirement, current compliance status, notes}
+Summary of issues closed in `modelcontextprotocol/csharp-sdk` across sliding windows:
+
+| Window | Total | Bugs | Enhancements | Questions | Docs | Unlabeled | Completed | Not Planned | With Linked PR |
+|--------|-------|------|--------------|-----------|------|-----------|-----------|-------------|----------------|
+| **7 days** | {N} | {N} | {N} | {N} | {N} | {N} | {N} | {N} | {N} |
+| **14 days** | {N} | {N} | {N} | {N} | {N} | {N} | {N} | {N} | {N} |
+| **28 days** | {N} | {N} | {N} | {N} | {N} | {N} | {N} | {N} | {N} |
+
+<details>
+<summary>Recently closed issues (last 28 days)</summary>
+
+| # | Closed | Type | Reason | Linked PR | Title |
+|---|--------|------|--------|-----------|-------|
+| [#N](url) | YYYY-MM-DD | bug | completed | [#N](url) | {Title} |
+
+</details>
 
 ---
 
@@ -185,7 +216,8 @@ For the collapsed backlog, use compact tables:
 | Stale issues | ⏰ |
 | Labels needed | ⚠️ |
 | Duplicates | 🔀 |
+| Related PRs | 🔗 |
 | Cross-SDK | 🔗 |
 | Context/stats | 📊 |
+| Recently closed | 📈 |
 | Backlog | 📋 |
-| Tier checklist | 📝 |
