@@ -1,13 +1,48 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Text.Json.Nodes;
 using ModelContextProtocol.Protocol;
 
 namespace ModelContextProtocol.Server;
+
+/// <summary>
+/// Intercepts a server-initiated outgoing request (sampling, elicitation, or roots) so that it can be
+/// redirected through an alternate channel instead of being sent directly to the client.
+/// </summary>
+/// <param name="method">The request method identifier (e.g., <c>"sampling/createMessage"</c>).</param>
+/// <param name="params">The serialized request parameters.</param>
+/// <param name="cancellationToken">The <see cref="CancellationToken"/> to monitor for cancellation requests.</param>
+/// <returns>The serialized result node for the request.</returns>
+[Experimental(Experimentals.Subclassing_DiagnosticId, UrlFormat = Experimentals.Subclassing_Url)]
+public delegate ValueTask<JsonNode?> McpOutgoingRequestInterceptor(string method, JsonNode? @params, CancellationToken cancellationToken);
 
 /// <summary>
 /// Represents an instance of a Model Context Protocol (MCP) server that connects to and communicates with an MCP client.
 /// </summary>
 public abstract partial class McpServer : McpSession
 {
+#pragma warning disable MCPEXP002
+    private static readonly AsyncLocal<McpOutgoingRequestInterceptor?> s_currentOutgoingRequestInterceptor = new();
+#pragma warning restore MCPEXP002
+
+    /// <summary>
+    /// Gets or sets the ambient interceptor that redirects server-initiated outgoing requests
+    /// (sampling, elicitation, roots) for the current asynchronous flow.
+    /// </summary>
+    /// <remarks>
+    /// This is an SDK extensibility hook intended for bolt-on packages (such as the MCP Tasks extension)
+    /// that run tool logic in the background and need to surface server-to-client requests through an
+    /// alternate channel. When set, <see cref="ElicitAsync(ModelContextProtocol.Protocol.ElicitRequestParams, CancellationToken)"/>,
+    /// <see cref="SampleAsync(ModelContextProtocol.Protocol.CreateMessageRequestParams, CancellationToken)"/>, and
+    /// <see cref="RequestRootsAsync(ModelContextProtocol.Protocol.ListRootsRequestParams, CancellationToken)"/> route
+    /// through the interceptor instead of sending directly to the client.
+    /// </remarks>
+    [Experimental(Experimentals.Subclassing_DiagnosticId, UrlFormat = Experimentals.Subclassing_Url)]
+    public static McpOutgoingRequestInterceptor? CurrentOutgoingRequestInterceptor
+    {
+        get => s_currentOutgoingRequestInterceptor.Value;
+        set => s_currentOutgoingRequestInterceptor.Value = value;
+    }
+
     /// <summary>
     /// Initializes a new instance of the <see cref="McpServer"/> class.
     /// </summary>

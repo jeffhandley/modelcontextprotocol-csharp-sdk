@@ -58,6 +58,16 @@ public abstract partial class McpSession : IAsyncDisposable
         McpHttpHeaders.IsJuly2026OrLaterProtocolVersion(NegotiatedProtocolVersion);
 
     /// <summary>
+    /// Gets a value indicating whether the negotiated protocol version supports the draft protocol
+    /// features (the <c>2026-07-28</c> revision or later).
+    /// </summary>
+    /// <remarks>
+    /// This is a public seam used by bolt-on extensions (such as the Tasks extension) to gate
+    /// functionality that requires the <c>2026-07-28</c> or later protocol revision.
+    /// </remarks>
+    public bool IsDraftProtocol() => IsJuly2026OrLaterProtocol();
+
+    /// <summary>
     /// Sends a JSON-RPC request to the connected session and waits for a response.
     /// </summary>
     /// <param name="request">The JSON-RPC request to send.</param>
