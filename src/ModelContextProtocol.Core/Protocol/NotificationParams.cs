@@ -8,8 +8,8 @@ namespace ModelContextProtocol.Protocol;
 /// </summary>
 public abstract class NotificationParams
 {
-    /// <summary>Prevent external derivations.</summary>
-    private protected NotificationParams()
+    /// <summary>Allow derivations only within the SDK and its extension packages.</summary>
+    protected NotificationParams()
     {
     }
 

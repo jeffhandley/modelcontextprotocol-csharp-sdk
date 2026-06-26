@@ -8,8 +8,8 @@ namespace ModelContextProtocol.Protocol;
 /// </summary>
 public abstract class Result
 {
-    /// <summary>Prevent external derivations.</summary>
-    private protected Result()
+    /// <summary>Allow derivations only within the SDK and its extension packages.</summary>
+    protected Result()
     {
     }
 

@@ -36,6 +36,7 @@ namespace ModelContextProtocol.Extensions.Tasks;
 [JsonSerializable(typeof(IDictionary<string, InputRequest>))]
 [JsonSerializable(typeof(IDictionary<string, InputResponse>))]
 [JsonSerializable(typeof(JsonObject))]
+[JsonSerializable(typeof(JsonNode))]
 [JsonSerializable(typeof(JsonElement))]
 [JsonSerializable(typeof(JsonRpcErrorDetail))]
 internal sealed partial class TasksJsonContext : JsonSerializerContext

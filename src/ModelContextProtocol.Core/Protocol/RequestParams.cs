@@ -11,8 +11,8 @@ namespace ModelContextProtocol.Protocol;
 /// </remarks>
 public abstract class RequestParams
 {
-    /// <summary>Prevent external derivations.</summary>
-    private protected RequestParams()
+    /// <summary>Allow derivations only within the SDK and its extension packages.</summary>
+    protected RequestParams()
     {
     }
 

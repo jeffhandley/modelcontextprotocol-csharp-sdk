@@ -26,11 +26,21 @@
     <Compile Include="..\Common\Experimentals.cs" Link="Experimentals.cs" />
   </ItemGroup>
 
-  <!-- Exclude polyfills inherited from Directory.Build.props; this package only needs the ExperimentalAttribute polyfill. -->
+  <!-- Exclude polyfills inherited from Directory.Build.props; include only the attribute polyfills these DTOs need. -->
   <ItemGroup>
     <Compile Remove="..\Common\Polyfills\**\*.cs" />
     <Compile Include="..\Common\Polyfills\System\Diagnostics\CodeAnalysis\ExperimentalAttribute.cs"
              Link="Polyfills\ExperimentalAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Diagnostics\CodeAnalysis\NullableAttributes.cs"
+             Link="Polyfills\NullableAttributes.cs" />
+    <Compile Include="..\Common\Polyfills\System\Diagnostics\CodeAnalysis\SetsRequiredMembersAttribute.cs"
+             Link="Polyfills\SetsRequiredMembersAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\CompilerFeatureRequiredAttribute.cs"
+             Link="Polyfills\CompilerFeatureRequiredAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\RequiredMemberAttribute.cs"
+             Link="Polyfills\RequiredMemberAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\IsExternalInit.cs"
+             Link="Polyfills\IsExternalInit.cs" />
   </ItemGroup>
 
   <ItemGroup>
