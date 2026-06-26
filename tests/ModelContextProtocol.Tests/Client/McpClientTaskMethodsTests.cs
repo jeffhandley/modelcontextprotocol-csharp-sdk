@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using System.Runtime.InteropServices;
@@ -27,10 +28,10 @@ public class McpClientTaskMethodsTests : ClientServerTestBase
     {
         mcpServerBuilder.Services.Configure<McpServerOptions>(options =>
         {
-            options.TaskStore = new InMemoryMcpTaskStore
+            options.WithTasks(new InMemoryMcpTaskStore
             {
                 DefaultPollIntervalMs = 50,
-            };
+            });
         });
 
         mcpServerBuilder.WithTools([McpServerTool.Create(

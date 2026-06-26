@@ -3,7 +3,6 @@ using Microsoft.Extensions.Options;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using System.Collections.Concurrent;
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -17,7 +16,6 @@ namespace ModelContextProtocol.Extensions.Tasks;
 /// client poll for completion via <c>tasks/get</c>, supply input via <c>tasks/update</c>, and cancel via
 /// <c>tasks/cancel</c>. State is held in an <see cref="IMcpTaskStore"/>.
 /// </remarks>
-[Experimental(Experimentals.Tasks_DiagnosticId, UrlFormat = Experimentals.Tasks_Url)]
 public static class McpServerTasksExtensions
 {
     /// <summary>
@@ -113,7 +111,18 @@ public static class McpServerTasksExtensions
             EnsureDraft(registry, request, TaskMethods.Update);
 
             var requestParams = Deserialize(request.Params, TasksJsonContext.Default.UpdateTaskRequestParams);
-            var inputResponses = requestParams.InputResponses ?? new Dictionary<string, InputResponse>();
+
+            // RequestParams deserializes inputResponses via an internal backing property that this assembly's
+            // source-generated context cannot access, so read the inputResponses node explicitly.
+            IDictionary<string, InputResponse> inputResponses = new Dictionary<string, InputResponse>();
+            if (request.Params is JsonObject paramsObject &&
+                paramsObject.TryGetPropertyValue("inputResponses", out var inputResponsesNode) &&
+                inputResponsesNode is not null)
+            {
+                inputResponses = JsonSerializer.Deserialize(inputResponsesNode, TasksJsonContext.Default.IDictionaryStringInputResponse)
+                    ?? inputResponses;
+            }
+
             await store.ResolveInputRequestsAsync(requestParams.TaskId, inputResponses, cancellationToken).ConfigureAwait(false);
 
             return JsonSerializer.SerializeToNode(new UpdateTaskResult(), TasksJsonContext.Default.UpdateTaskResult);

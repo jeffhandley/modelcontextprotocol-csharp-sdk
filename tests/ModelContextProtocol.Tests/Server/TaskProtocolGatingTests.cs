@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using System.Runtime.InteropServices;
@@ -34,10 +35,10 @@ public class TaskProtocolGatingTests : ClientServerTestBase
     {
         mcpServerBuilder.Services.Configure<McpServerOptions>(options =>
         {
-            options.TaskStore = new InMemoryMcpTaskStore
+            options.WithTasks(new InMemoryMcpTaskStore
             {
                 DefaultPollIntervalMs = 50,
-            };
+            });
         });
 
         mcpServerBuilder.WithTools([McpServerTool.Create(
@@ -157,10 +158,10 @@ public class TaskProtocolGatingTests : ClientServerTestBase
         // gates tasks/* to the 2026-07-28 protocol and must reject this legacy request with MethodNotFound.
         var request = new JsonRpcRequest
         {
-            Method = RequestMethods.TasksGet,
+            Method = TaskMethods.Get,
             Params = JsonSerializer.SerializeToNode(
                 new GetTaskRequestParams { TaskId = "some-task-id" },
-                McpJsonUtilities.DefaultOptions),
+                McpTasksJsonUtilities.DefaultOptions),
         };
 
         var ex = await Assert.ThrowsAsync<McpProtocolException>(async () =>

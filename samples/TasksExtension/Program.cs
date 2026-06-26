@@ -13,6 +13,7 @@
 // is self-contained — no separate server process or HTTP transport required.
 
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using System.ComponentModel;
@@ -21,22 +22,25 @@ using System.Text.Json;
 
 Pipe clientToServerPipe = new(), serverToClientPipe = new();
 
+McpServerOptions serverOptions = new()
+{
+    ToolCollection = [McpServerTool.Create(SlowTools.RunReport, new() { Name = "run-report" })],
+};
+
+// Calling WithTasks is all that's needed for [McpServerTool]-attributed tools to be
+// automatically wrapped as background tasks when the client opts in.
+serverOptions.WithTasks(new InMemoryMcpTaskStore { DefaultPollIntervalMs = 250 });
+
 await using McpServer server = McpServer.Create(
     new StreamServerTransport(clientToServerPipe.Reader.AsStream(), serverToClientPipe.Writer.AsStream()),
-    new McpServerOptions
-    {
-        // Setting TaskStore is all that's needed for [McpServerTool]-attributed tools to be
-        // automatically wrapped as background tasks when the client opts in.
-        TaskStore = new InMemoryMcpTaskStore { DefaultPollIntervalMs = 250 },
-        ToolCollection = [McpServerTool.Create(SlowTools.RunReport, new() { Name = "run-report" })],
-    });
+    serverOptions);
 _ = server.RunAsync();
 
 await using McpClient client = await McpClient.CreateAsync(
     new StreamClientTransport(clientToServerPipe.Writer.AsStream(), serverToClientPipe.Reader.AsStream()));
 
-Console.WriteLine("=== CallToolAsync (auto-poll) ===");
-var auto = await client.CallToolAsync(
+Console.WriteLine("=== CallToolAsTaskAsync (auto-poll) ===");
+var auto = await client.CallToolAsTaskAsync(
     new CallToolRequestParams { Name = "run-report" });
 Console.WriteLine($"  result: {((TextContentBlock)auto.Content[0]).Text}");
 Console.WriteLine();

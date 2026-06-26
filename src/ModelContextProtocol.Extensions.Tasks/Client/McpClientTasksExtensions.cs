@@ -1,6 +1,5 @@
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -11,9 +10,9 @@ namespace ModelContextProtocol.Extensions.Tasks;
 /// </summary>
 /// <remarks>
 /// These methods let a client request task-augmented tool execution and drive the task lifecycle
-/// (<c>tasks/get</c>, <c>tasks/update</c>, <c>tasks/cancel</c>). The Tasks extension is draft-only.
+/// (<c>tasks/get</c>, <c>tasks/update</c>, <c>tasks/cancel</c>). The Tasks extension requires the
+/// <c>2026-07-28</c> or later protocol revision.
 /// </remarks>
-[Experimental(Experimentals.Tasks_DiagnosticId, UrlFormat = Experimentals.Tasks_Url)]
 public static class McpClientTasksExtensions
 {
     /// <summary>The default number of consecutive stuck polls tolerated before a task is abandoned.</summary>
@@ -309,11 +308,19 @@ public static class McpClientTasksExtensions
         if (requestParams is null) throw new ArgumentNullException(nameof(requestParams));
         ThrowIfTasksNotSupported(client, nameof(UpdateTaskAsync));
 
+        // RequestParams serializes inputResponses via an internal backing property that this assembly's
+        // source-generated context cannot access, so attach the inputResponses node explicitly.
+        var paramsNode = JsonSerializer.SerializeToNode(requestParams, TasksJsonContext.Default.UpdateTaskRequestParams);
+        if (requestParams.InputResponses is { Count: > 0 } responses && paramsNode is JsonObject paramsObject)
+        {
+            paramsObject["inputResponses"] = JsonSerializer.SerializeToNode(responses, TasksJsonContext.Default.IDictionaryStringInputResponse);
+        }
+
         var response = await client.SendRequestAsync(
             new JsonRpcRequest
             {
                 Method = TaskMethods.Update,
-                Params = JsonSerializer.SerializeToNode(requestParams, TasksJsonContext.Default.UpdateTaskRequestParams),
+                Params = paramsNode,
             },
             cancellationToken).ConfigureAwait(false);
 
@@ -396,9 +403,8 @@ public static class McpClientTasksExtensions
         if (!client.IsDraftProtocol())
         {
             throw new InvalidOperationException(
-                $"'{operationName}' requires the draft protocol revision. " +
-                $"The negotiated protocol version is '{client.NegotiatedProtocolVersion ?? "(none)"}'. " +
-                "The Tasks extension is only available under the draft revision.");
+                $"'{operationName}' requires a newer protocol revision that supports tasks. " +
+                $"The negotiated protocol version is '{client.NegotiatedProtocolVersion ?? "(none)"}'.");
         }
     }
 }

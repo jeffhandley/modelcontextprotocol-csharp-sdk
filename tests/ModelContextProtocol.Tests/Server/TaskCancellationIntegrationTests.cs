@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using ModelContextProtocol.Tests.Utils;
@@ -31,11 +32,11 @@ public class TaskCancellationIntegrationTests : ClientServerTestBase
     {
         mcpServerBuilder.Services.Configure<McpServerOptions>(options =>
         {
-            options.TaskStore = new InMemoryMcpTaskStore
+            options.WithTasks(new InMemoryMcpTaskStore
             {
                 DefaultPollIntervalMs = 50,
                 DefaultTimeToLive = TimeSpan.FromSeconds(5),
-            };
+            });
         });
 
         mcpServerBuilder.WithTools([McpServerTool.Create(
@@ -132,10 +133,10 @@ public class TaskCancellationConcurrencyTests : ClientServerTestBase
     {
         mcpServerBuilder.Services.Configure<McpServerOptions>(options =>
         {
-            options.TaskStore = new InMemoryMcpTaskStore
+            options.WithTasks(new InMemoryMcpTaskStore
             {
                 DefaultPollIntervalMs = 50,
-            };
+            });
         });
 
         mcpServerBuilder.WithTools([McpServerTool.Create(
@@ -275,10 +276,10 @@ public class TerminalTaskStatusTransitionTests : ClientServerTestBase
     {
         mcpServerBuilder.Services.Configure<McpServerOptions>(options =>
         {
-            options.TaskStore = new InMemoryMcpTaskStore
+            options.WithTasks(new InMemoryMcpTaskStore
             {
                 DefaultPollIntervalMs = 50,
-            };
+            });
         });
 
         mcpServerBuilder.WithTools([
