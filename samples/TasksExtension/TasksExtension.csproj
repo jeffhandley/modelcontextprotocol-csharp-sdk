@@ -5,11 +5,12 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <NoWarn>$(NoWarn);MCPEXP001</NoWarn>
+    <NoWarn>$(NoWarn);MCPEXP001;MCPEXP002;MCPEXP004</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ModelContextProtocol\ModelContextProtocol.csproj" />
+    <ProjectReference Include="..\..\src\ModelContextProtocol.Extensions.Tasks\ModelContextProtocol.Extensions.Tasks.csproj" />
   </ItemGroup>
 
 </Project>

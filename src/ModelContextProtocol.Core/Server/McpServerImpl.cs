@@ -28,7 +28,6 @@ internal sealed partial class McpServerImpl : McpServer
     private readonly RequestHandlers _requestHandlers;
     private readonly McpSessionHandler _sessionHandler;
     private readonly SemaphoreSlim _disposeLock = new(1, 1);
-    private readonly ConcurrentDictionary<string, CancellationTokenSource> _taskCancellationSources = new();
     private readonly ConcurrentDictionary<string, MrtrContinuation> _mrtrContinuations = new();
     private readonly ConcurrentDictionary<RequestId, MrtrContext> _mrtrContextsByRequestId = new();
 
@@ -64,7 +63,6 @@ internal sealed partial class McpServerImpl : McpServer
     /// <param name="serviceProvider">Optional service provider to use for dependency injection</param>
     /// <exception cref="McpException">The server was incorrectly configured.</exception>
     public McpServerImpl(ITransport transport, McpServerOptions options, ILoggerFactory? loggerFactory, IServiceProvider? serviceProvider)
-#pragma warning restore MCPEXP002
     {
         Throw.IfNull(transport);
         Throw.IfNull(options);
@@ -95,7 +93,7 @@ internal sealed partial class McpServerImpl : McpServer
         ConfigureCompletion(options);
         ConfigureSubscriptions(options);
         ConfigureExperimentalAndExtensions(options);
-        ConfigureTasks(options);
+        ConfigureRawRequestHandlers(options);
         ConfigureMrtr();
 
         // Register any notification handlers that were provided.
@@ -311,13 +309,6 @@ internal sealed partial class McpServerImpl : McpServer
         }
 
         _disposed = true;
-
-        foreach (var kvp in _taskCancellationSources)
-        {
-            kvp.Value.Cancel();
-            kvp.Value.Dispose();
-        }
-        _taskCancellationSources.Clear();
 
         // Dispose the session handler - cancels message processing and waits for all
         // in-flight request handlers (including retries in AwaitMrtrHandlerAsync) to complete.
@@ -754,110 +745,56 @@ internal sealed partial class McpServerImpl : McpServer
         return result;
     }
 
-    private void ConfigureTasks(McpServerOptions options)
+    private void ConfigureRawRequestHandlers(McpServerOptions options)
     {
-        var getTaskHandler = options.Handlers.GetTaskHandler;
-        var updateTaskHandler = options.Handlers.UpdateTaskHandler;
-        var cancelTaskHandler = options.Handlers.CancelTaskHandler;
-        var taskStore = options.TaskStore;
-
-        // If a task store is provided, wire up handlers from it for any that aren't explicitly set.
-        if (taskStore is not null)
-        {
-            getTaskHandler ??= async (request, cancellationToken) =>
-            {
-                var info = await taskStore.GetTaskAsync(request.Params!.TaskId, cancellationToken).ConfigureAwait(false);
-                return info is null
-                    ? throw new McpProtocolException($"Unknown task: '{request.Params.TaskId}'", McpErrorCode.InvalidParams)
-                    : ToGetTaskResult(info);
-            };
-
-            updateTaskHandler ??= async (request, cancellationToken) =>
-            {
-                var inputResponses = request.Params!.InputResponses ?? new Dictionary<string, InputResponse>();
-                await taskStore.ResolveInputRequestsAsync(request.Params.TaskId, inputResponses, cancellationToken).ConfigureAwait(false);
-
-                return new UpdateTaskResult();
-            };
-
-            cancelTaskHandler ??= async (request, cancellationToken) =>
-            {
-                // Idempotent ack per SEP-2663: always return CancelTaskResult regardless of whether
-                // the task was known/cancellable. The store's SetCancelledAsync no-ops for unknown
-                // or already-terminal tasks; we still surface a success response to the client.
-                await taskStore.SetCancelledAsync(request.Params!.TaskId, cancellationToken).ConfigureAwait(false);
-
-                // Signal the task's CancellationTokenSource if one exists. Whichever side
-                // (this handler or the background runner's finally block) wins TryRemove owns disposal,
-                // which prevents the runner from observing ObjectDisposedException through cts.Token.
-                if (_taskCancellationSources.TryRemove(request.Params.TaskId, out var cts))
-                {
-                    cts.Cancel();
-                    cts.Dispose();
-                }
-
-                return new CancelTaskResult();
-            };
-        }
-
-        if (getTaskHandler is null && updateTaskHandler is null && cancelTaskHandler is null)
+        if (options.RawRequestHandlerConfigurators is not { Count: > 0 } configurators)
         {
             return;
         }
 
-        getTaskHandler ??= (static async (request, _) => throw new McpProtocolException($"Unknown task: '{request.Params?.TaskId}'", McpErrorCode.InvalidParams));
-        updateTaskHandler ??= (static async (request, _) => throw new McpProtocolException($"Unknown task: '{request.Params?.TaskId}'", McpErrorCode.InvalidParams));
-        cancelTaskHandler ??= (static async (request, _) => throw new McpProtocolException($"Unknown task: '{request.Params?.TaskId}'", McpErrorCode.InvalidParams));
-
-        // The tasks/* methods do not exist before the 2026-07-28 revision (SEP-2663). Reject them with
-        // MethodNotFound when the request was negotiated under a legacy protocol version. The handlers
-        // stay registered so a dual-era server still serves them for 2026-07-28 requests.
-        getTaskHandler = GateTaskMethodToJuly2026OrLaterProtocol(getTaskHandler, RequestMethods.TasksGet);
-        updateTaskHandler = GateTaskMethodToJuly2026OrLaterProtocol(updateTaskHandler, RequestMethods.TasksUpdate);
-        cancelTaskHandler = GateTaskMethodToJuly2026OrLaterProtocol(cancelTaskHandler, RequestMethods.TasksCancel);
-
-        // Advertise tasks extension in server capabilities.
-        ServerCapabilities.Extensions ??= new Dictionary<string, object>();
-        ServerCapabilities.Extensions[McpExtensions.Tasks] = new JsonObject();
-
-        SetHandler(
-            RequestMethods.TasksGet,
-            getTaskHandler,
-            McpJsonUtilities.JsonContext.Default.GetTaskRequestParams,
-            McpJsonUtilities.JsonContext.Default.GetTaskResult);
-
-        SetHandler(
-            RequestMethods.TasksUpdate,
-            updateTaskHandler,
-            McpJsonUtilities.JsonContext.Default.UpdateTaskRequestParams,
-            McpJsonUtilities.JsonContext.Default.UpdateTaskResult);
-
-        SetHandler(
-            RequestMethods.TasksCancel,
-            cancelTaskHandler,
-            McpJsonUtilities.JsonContext.Default.CancelTaskRequestParams,
-            McpJsonUtilities.JsonContext.Default.CancelTaskResult);
+        var registry = new RawHandlerRegistry(this);
+        foreach (var configurator in configurators)
+        {
+            configurator(registry);
+        }
     }
 
     /// <summary>
-    /// Wraps a tasks/* request handler so it throws <see cref="McpErrorCode.MethodNotFound"/> unless the
-    /// request was negotiated under the 2026-07-28 or later revision. The tasks extension (SEP-2663) only
-    /// interoperates on the 2026-07-28 revision, and these methods don't exist on older peers.
+    /// Adapts the internal <see cref="RequestHandlers"/> dictionary to the public
+    /// <see cref="IMcpServerRawHandlerRegistry"/> seam used by bolt-on extensions.
     /// </summary>
-    private McpRequestHandler<TParams, TResult> GateTaskMethodToJuly2026OrLaterProtocol<TParams, TResult>(
-        McpRequestHandler<TParams, TResult> inner, string method)
-        => (request, cancellationToken) =>
+    private sealed class RawHandlerRegistry(McpServerImpl server) : IMcpServerRawHandlerRegistry
+    {
+        public McpServer Server => server;
+
+        public bool ContainsHandler(string method) => server._requestHandlers.ContainsKey(method);
+
+        public void SetHandler(string method, McpRawRequestHandler handler)
         {
-            if (!IsJuly2026OrLaterProtocolRequest(request.JsonRpcRequest))
+            Throw.IfNull(method);
+            Throw.IfNull(handler);
+
+            server._requestHandlers[method] = (request, cancellationToken) => handler(request, cancellationToken).AsTask();
+        }
+
+        public bool TryWrapHandler(string method, Func<McpRawRequestHandler, McpRawRequestHandler> wrap)
+        {
+            Throw.IfNull(method);
+            Throw.IfNull(wrap);
+
+            if (!server._requestHandlers.TryGetValue(method, out var existing))
             {
-                throw new McpProtocolException(
-                    $"The method '{method}' requires a newer protocol revision that supports tasks; " +
-                    $"the negotiated protocol version is '{NegotiatedProtocolVersion ?? "(none)"}'.",
-                    McpErrorCode.MethodNotFound);
+                return false;
             }
 
-            return inner(request, cancellationToken);
-        };
+            McpRawRequestHandler inner = (request, cancellationToken) => new ValueTask<JsonNode?>(existing(request, cancellationToken));
+            var wrapped = wrap(inner);
+            server._requestHandlers[method] = (request, cancellationToken) => wrapped(request, cancellationToken).AsTask();
+            return true;
+        }
+
+        public bool IsDraftProtocolRequest(JsonRpcRequest request) => server.IsJuly2026OrLaterProtocolRequest(request);
+    }
 
     private void ConfigureExperimentalAndExtensions(McpServerOptions options)
     {
@@ -1134,11 +1071,10 @@ internal sealed partial class McpServerImpl : McpServer
     {
         var listToolsHandler = options.Handlers.ListToolsHandler;
         var callToolHandler = options.Handlers.CallToolHandler;
-        var callToolWithTaskHandler = options.Handlers.CallToolWithTaskHandler;
         var tools = options.ToolCollection;
         var toolsCapability = options.Capabilities?.Tools;
 
-        if (listToolsHandler is null && callToolHandler is null && callToolWithTaskHandler is null && tools is null &&
+        if (listToolsHandler is null && callToolHandler is null && tools is null &&
             toolsCapability is null)
         {
             return;
@@ -1150,18 +1086,6 @@ internal sealed partial class McpServerImpl : McpServer
         var listChanged = toolsCapability?.ListChanged;
 
         var callToolFilters = options.Filters.Request.CallToolFilters;
-        var callToolWithTaskFilters = options.Filters.Request.CallToolWithTaskFilters;
-
-        // Validate: cannot mix non-task filters/handler with task filters/handler.
-        bool hasNonTaskPath = callToolHandler is not null || callToolFilters.Count > 0;
-        bool hasTaskPath = callToolWithTaskHandler is not null || callToolWithTaskFilters.Count > 0;
-
-        if (hasNonTaskPath && hasTaskPath)
-        {
-            throw new InvalidOperationException(
-                $"Cannot mix non-task ({nameof(McpServerHandlers.CallToolHandler)}/{nameof(McpRequestFilters.CallToolFilters)}) " +
-                $"with task-based ({nameof(McpServerHandlers.CallToolWithTaskHandler)}/{nameof(McpRequestFilters.CallToolWithTaskFilters)}). Use one style or the other.");
-        }
 
         // Handle tools provided via DI by augmenting the list handler.
         if (tools is not null)
@@ -1202,158 +1126,25 @@ internal sealed partial class McpServerImpl : McpServer
 
         listToolsHandler = BuildFilterPipeline(listToolsHandler, options.Filters.Request.ListToolsFilters);
 
-        // Build the unified task-augmented handler from one of the two paths.
-        if (hasTaskPath)
+        // Build the call-tool handler: dispatch to DI tools, then apply filters.
+        callToolHandler ??= (static async (request, _) => throw new McpProtocolException($"Unknown tool: '{request.Params?.Name}'", McpErrorCode.InvalidParams));
+
+        // Augment with DI tools.
+        if (tools is not null)
         {
-            // Case 2: task filter + task handler
-            callToolWithTaskHandler ??= (static async (request, _) => throw new McpProtocolException($"Unknown tool: '{request.Params?.Name}'", McpErrorCode.InvalidParams));
-
-            // Augment with DI tools.
-            if (tools is not null)
+            var originalHandler = callToolHandler;
+            callToolHandler = (request, cancellationToken) =>
             {
-                var originalHandler = callToolWithTaskHandler;
-                callToolWithTaskHandler = (request, cancellationToken) =>
+                if (request.MatchedPrimitive is McpServerTool tool)
                 {
-                    if (request.MatchedPrimitive is McpServerTool tool)
-                    {
-                        return InvokeToolAsTask(tool, request, cancellationToken);
-                    }
-
-                    return originalHandler(request, cancellationToken);
-                };
-            }
-
-            callToolWithTaskHandler = BuildFilterPipeline(callToolWithTaskHandler, callToolWithTaskFilters, BuildInitialTaskToolFilter(tools));
-        }
-        else
-        {
-            // Case 1: non-task filter + non-task handler → apply filters, then convert to task-based
-            callToolHandler ??= (static async (request, _) => throw new McpProtocolException($"Unknown tool: '{request.Params?.Name}'", McpErrorCode.InvalidParams));
-
-            // Augment with DI tools.
-            if (tools is not null)
-            {
-                var originalHandler = callToolHandler;
-                callToolHandler = (request, cancellationToken) =>
-                {
-                    if (request.MatchedPrimitive is McpServerTool tool)
-                    {
-                        return tool.InvokeAsync(request, cancellationToken);
-                    }
-
-                    return originalHandler(request, cancellationToken);
-                };
-            }
-
-            callToolHandler = BuildFilterPipeline(callToolHandler, callToolFilters, BuildInitialCallToolFilter(tools));
-
-            // Convert to task-based.
-            var finalCallToolHandler = callToolHandler;
-            callToolWithTaskHandler = async (request, cancellationToken) =>
-                await finalCallToolHandler(request, cancellationToken).ConfigureAwait(false);
-        }
-
-        // If a task store is configured, wrap so that when the client signals task support
-        // the tool execution is offloaded to the background via the store.
-        if (options.TaskStore is { } taskStore)
-        {
-            var innerTaskHandler = callToolWithTaskHandler;
-            callToolWithTaskHandler = async (request, cancellationToken) =>
-            {
-                // The SEP-2663 Tasks extension requires the 2026-07-28 or later revision: the task wire shapes we ship do not
-                // interoperate with legacy (<= 2025-11-25) peers. Only materialize a task when the
-                // request was negotiated under the 2026-07-28 or later revision AND the client opted in; otherwise
-                // run the inner handler and return the direct result (best-effort downgrade, which also
-                // defends against a non-conformant legacy client that forges the opt-in envelope).
-                if (IsJuly2026OrLaterProtocolRequest(request.JsonRpcRequest) && HasTaskExtensionOptIn(request.Params?.Meta))
-                {
-                    var taskInfo = await taskStore.CreateTaskAsync(cancellationToken).ConfigureAwait(false);
-                    var taskId = taskInfo.TaskId;
-
-                    var cts = new CancellationTokenSource();
-                    _taskCancellationSources[taskId] = cts;
-
-                    // Capture the token synchronously before Task.Run dispatches the work.
-                    // The cancel handler may race with the background runner: whichever side wins
-                    // the TryRemove call owns disposal. If we accessed cts.Token from inside the
-                    // lambda after the handler had already disposed cts, we'd hit ObjectDisposedException.
-                    var taskCancellationToken = cts.Token;
-
-                    _ = Task.Run(async () =>
-                    {
-                        using (CreateMcpTaskScope(taskId, taskStore))
-                        {
-                            try
-                            {
-                                var augmented = await innerTaskHandler(request, taskCancellationToken).ConfigureAwait(false);
-                                if (augmented.IsTask)
-                                {
-                                    // The handler created its own task externally, but the client already holds
-                                    // the store's taskId from the synchronous return below — we can't redirect.
-                                    // Fail the store's task so the client sees a clear error instead of polling forever.
-                                    var error = new JsonRpcErrorDetail
-                                    {
-                                        Code = (int)McpErrorCode.InternalError,
-                                        Message = $"{nameof(McpServerOptions.TaskStore)} is configured and the {nameof(McpServerHandlers.CallToolWithTaskHandler)} returned IsTask = true. Use only one mechanism to create the task.",
-                                    };
-                                    var errorJson = JsonSerializer.SerializeToElement(error, McpJsonUtilities.JsonContext.Default.JsonRpcErrorDetail);
-                                    await taskStore.SetFailedAsync(taskId, errorJson).ConfigureAwait(false);
-                                    return;
-                                }
-
-                                var resultJson = JsonSerializer.SerializeToElement(augmented.Result!, McpJsonUtilities.JsonContext.Default.CallToolResult);
-                                await taskStore.SetCompletedAsync(taskId, resultJson).ConfigureAwait(false);
-                            }
-                            catch (OperationCanceledException) when (taskCancellationToken.IsCancellationRequested)
-                            {
-                                await taskStore.SetCancelledAsync(taskId, CancellationToken.None).ConfigureAwait(false);
-                            }
-                            catch (InputRequiredException)
-                            {
-                                // MRTR (input requests) cannot be composed with the task-store wrapper for
-                                // [McpServerTool] methods today: the task ID was already returned synchronously,
-                                // so we have no way to surface InputRequiredResult to the client retroactively.
-                                // Fail the task with a clear, actionable error instead of leaking the raw
-                                // InputRequiredException through the generic catch below.
-                                var error = new JsonRpcErrorDetail
-                                {
-                                    Code = (int)McpErrorCode.InvalidRequest,
-                                    Message = "MRTR (input requests) and tasks cannot be composed via [McpServerTool] yet; " +
-                                              $"use {nameof(McpServerHandlers.CallToolWithTaskHandler)} to manage the input-request loop manually within the task body.",
-                                };
-                                var errorJson = JsonSerializer.SerializeToElement(error, McpJsonUtilities.JsonContext.Default.JsonRpcErrorDetail);
-                                await taskStore.SetFailedAsync(taskId, errorJson).ConfigureAwait(false);
-                            }
-                            catch (Exception ex)
-                            {
-                                // SEP-2663 §186: failed.error MUST be a JSON-RPC error object {code, message, data?}.
-                                // McpProtocolException carries a JSON-RPC ErrorCode and is documented as safe to
-                                // propagate (Message + ErrorCode). For any other exception type, redact the message
-                                // and use InternalError (mirrors the redaction in BuildInitialCallToolFilter).
-                                var error = ex is McpProtocolException mcpEx
-                                    ? new JsonRpcErrorDetail { Code = (int)mcpEx.ErrorCode, Message = mcpEx.Message }
-                                    : new JsonRpcErrorDetail { Code = (int)McpErrorCode.InternalError, Message = "An error occurred while executing the task." };
-                                var errorJson = JsonSerializer.SerializeToElement(error, McpJsonUtilities.JsonContext.Default.JsonRpcErrorDetail);
-                                await taskStore.SetFailedAsync(taskId, errorJson).ConfigureAwait(false);
-                            }
-                            finally
-                            {
-                                // Only the side that wins TryRemove disposes cts. This prevents a
-                                // double-dispose race with the default tasks/cancel handler.
-                                if (_taskCancellationSources.TryRemove(taskId, out var registeredCts))
-                                {
-                                    registeredCts.Dispose();
-                                }
-                            }
-                        }
-                    }, CancellationToken.None);
-
-                    return ToCreateTaskResult(taskInfo);
+                    return tool.InvokeAsync(request, cancellationToken);
                 }
 
-                return await innerTaskHandler(request, cancellationToken).ConfigureAwait(false);
+                return originalHandler(request, cancellationToken);
             };
         }
+
+        callToolHandler = BuildFilterPipeline(callToolHandler, callToolFilters, BuildInitialCallToolFilter(tools));
 
         ServerCapabilities.Tools.ListChanged = listChanged;
 
@@ -1363,99 +1154,11 @@ internal sealed partial class McpServerImpl : McpServer
             McpJsonUtilities.JsonContext.Default.ListToolsRequestParams,
             McpJsonUtilities.JsonContext.Default.ListToolsResult);
 
-        SetTaskAugmentedHandler(
+        SetHandler(
             RequestMethods.ToolsCall,
-            callToolWithTaskHandler,
+            callToolHandler,
             McpJsonUtilities.JsonContext.Default.CallToolRequestParams,
-            McpJsonUtilities.JsonContext.Default.CallToolResult,
-            McpJsonUtilities.JsonContext.Default.CreateTaskResult);
-    }
-
-    private static CreateTaskResult ToCreateTaskResult(McpTaskInfo info) => new()
-    {
-        TaskId = info.TaskId,
-        Status = info.Status,
-        CreatedAt = info.CreatedAt,
-        LastUpdatedAt = info.LastUpdatedAt,
-        TimeToLive = info.TimeToLive,
-        PollIntervalMs = info.PollIntervalMs,
-        StatusMessage = info.StatusMessage,
-        ResultType = "task",
-    };
-
-    private static GetTaskResult ToGetTaskResult(McpTaskInfo info) => info.Status switch
-    {
-        McpTaskStatus.Working => new WorkingTaskResult
-        {
-            TaskId = info.TaskId,
-            CreatedAt = info.CreatedAt,
-            LastUpdatedAt = info.LastUpdatedAt,
-            TimeToLive = info.TimeToLive,
-            PollIntervalMs = info.PollIntervalMs,
-            StatusMessage = info.StatusMessage,
-            ResultType = "complete",
-        },
-        McpTaskStatus.Completed => new CompletedTaskResult
-        {
-            TaskId = info.TaskId,
-            CreatedAt = info.CreatedAt,
-            LastUpdatedAt = info.LastUpdatedAt,
-            TimeToLive = info.TimeToLive,
-            PollIntervalMs = info.PollIntervalMs,
-            StatusMessage = info.StatusMessage,
-            Result = info.Result ?? throw new InvalidOperationException($"Task '{info.TaskId}' is completed but has no result."),
-            ResultType = "complete",
-        },
-        McpTaskStatus.Failed => new FailedTaskResult
-        {
-            TaskId = info.TaskId,
-            CreatedAt = info.CreatedAt,
-            LastUpdatedAt = info.LastUpdatedAt,
-            TimeToLive = info.TimeToLive,
-            PollIntervalMs = info.PollIntervalMs,
-            StatusMessage = info.StatusMessage,
-            Error = info.Error ?? throw new InvalidOperationException($"Task '{info.TaskId}' is failed but has no error."),
-            ResultType = "complete",
-        },
-        McpTaskStatus.Cancelled => new CancelledTaskResult
-        {
-            TaskId = info.TaskId,
-            CreatedAt = info.CreatedAt,
-            LastUpdatedAt = info.LastUpdatedAt,
-            TimeToLive = info.TimeToLive,
-            PollIntervalMs = info.PollIntervalMs,
-            StatusMessage = info.StatusMessage,
-            ResultType = "complete",
-        },
-        McpTaskStatus.InputRequired => new InputRequiredTaskResult
-        {
-            TaskId = info.TaskId,
-            CreatedAt = info.CreatedAt,
-            LastUpdatedAt = info.LastUpdatedAt,
-            TimeToLive = info.TimeToLive,
-            PollIntervalMs = info.PollIntervalMs,
-            StatusMessage = info.StatusMessage,
-            // McpTaskInfo.InputRequests is IReadOnlyDictionary (covers immutable store
-            // implementations like InMemoryMcpTaskStore's ImmutableDictionary), while the wire
-            // DTO uses IDictionary like every other Protocol type. Most concrete stores back
-            // their dictionaries with a type that implements both interfaces (Dictionary,
-            // ImmutableDictionary, ConcurrentDictionary), so the cast usually succeeds and we
-            // only allocate a copy as a fallback.
-            InputRequests = info.InputRequests is IDictionary<string, InputRequest> dict
-                ? dict
-                : info.InputRequests?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
-                    ?? new Dictionary<string, InputRequest>(),
-            ResultType = "complete",
-        },
-        _ => throw new InvalidOperationException($"Unknown task status: {info.Status}"),
-    };
-
-    private static async ValueTask<ResultOrCreatedTask<CallToolResult>> InvokeToolAsTask(
-        McpServerTool tool,
-        RequestContext<CallToolRequestParams> request,
-        CancellationToken cancellationToken)
-    {
-        return await tool.InvokeAsync(request, cancellationToken).ConfigureAwait(false);
+            McpJsonUtilities.JsonContext.Default.CallToolResult);
     }
 
     private McpRequestFilter<CallToolRequestParams, CallToolResult> BuildInitialCallToolFilter(
@@ -1489,53 +1192,6 @@ internal sealed partial class McpServerImpl : McpServer
                 }
 
                 return new()
-                {
-                    IsError = true,
-                    Content = [new TextContentBlock
-                    {
-                        Text = e is McpException ?
-                            $"An error occurred invoking '{request.Params?.Name}': {e.Message}" :
-                            $"An error occurred invoking '{request.Params?.Name}'.",
-                    }],
-                };
-            }
-        };
-
-    private McpRequestFilter<CallToolRequestParams, ResultOrCreatedTask<CallToolResult>> BuildInitialTaskToolFilter(
-        McpServerPrimitiveCollection<McpServerTool>? tools) => handler =>
-        async (request, cancellationToken) =>
-        {
-            if (request.Params?.Name is { } toolName && tools is not null &&
-                tools.TryGetPrimitive(toolName, out var tool))
-            {
-                request.MatchedPrimitive = tool;
-            }
-
-            try
-            {
-                var result = await handler(request, cancellationToken).ConfigureAwait(false);
-                if (!result.IsTask)
-                {
-                    ToolCallCompleted(request.Params?.Name ?? string.Empty, result.Result!.IsError is true);
-                }
-
-                return result;
-            }
-            catch (Exception e)
-            {
-                // Skip logging for InputRequiredException - it's normal MRTR control flow,
-                // not an error (tools throw it to signal an InputRequiredResult).
-                if (!(e is OperationCanceledException && cancellationToken.IsCancellationRequested) && e is not InputRequiredException)
-                {
-                    ToolCallError(request.Params?.Name ?? string.Empty, e);
-                }
-
-                if ((e is OperationCanceledException && cancellationToken.IsCancellationRequested) || e is McpProtocolException || e is InputRequiredException)
-                {
-                    throw;
-                }
-
-                return new CallToolResult
                 {
                     IsError = true,
                     Content = [new TextContentBlock
@@ -1670,20 +1326,6 @@ internal sealed partial class McpServerImpl : McpServer
             requestTypeInfo, responseTypeInfo);
     }
 
-    private void SetTaskAugmentedHandler<TParams, TResult>(
-        string method,
-        McpRequestHandler<TParams, ResultOrCreatedTask<TResult>> handler,
-        JsonTypeInfo<TParams> requestTypeInfo,
-        JsonTypeInfo<TResult> responseTypeInfo,
-        JsonTypeInfo<CreateTaskResult> taskResultTypeInfo)
-        where TResult : Result
-    {
-        _requestHandlers.SetTaskAugmented(method,
-            (request, jsonRpcRequest, cancellationToken) =>
-                InvokeHandlerAsync(handler, request, jsonRpcRequest, cancellationToken),
-            requestTypeInfo, responseTypeInfo, taskResultTypeInfo);
-    }
-
     private static McpRequestHandler<TParams, TResult> BuildFilterPipeline<TParams, TResult>(
         McpRequestHandler<TParams, TResult> baseHandler,
         IList<McpRequestFilter<TParams, TResult>> filters,
@@ -1703,15 +1345,6 @@ internal sealed partial class McpServerImpl : McpServer
 
         return current;
     }
-
-    // Per SEP-2663 §51, the client opts in to the tasks extension on a per-request basis
-    // via the SEP-2575 capabilities envelope:
-    //   _meta/io.modelcontextprotocol/clientCapabilities/extensions/io.modelcontextprotocol/tasks = {}
-    private static bool HasTaskExtensionOptIn(JsonObject? meta) =>
-        meta is not null &&
-        meta[MetaKeys.ClientCapabilities] is JsonObject caps &&
-        caps["extensions"] is JsonObject exts &&
-        exts.ContainsKey(McpExtensions.Tasks);
 
     private JsonRpcMessageFilter BuildMessageFilterPipeline(IList<McpMessageFilter> filters)
     {

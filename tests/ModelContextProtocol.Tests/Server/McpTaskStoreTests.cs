@@ -1,5 +1,6 @@
 using Microsoft.Extensions.AI;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,10 +32,10 @@ public class McpTaskStoreTests : ClientServerTestBase
 
         mcpServerBuilder.Services.Configure<McpServerOptions>(options =>
         {
-            options.TaskStore = new InMemoryMcpTaskStore
+            options.WithTasks(new InMemoryMcpTaskStore
             {
                 DefaultPollIntervalMs = 50,
-            };
+            });
         });
     }
 
@@ -60,9 +61,7 @@ public class McpTaskStoreTests : ClientServerTestBase
         await using var client = await CreateMcpClientForServer();
 
         // CallToolAsync should poll until the background execution completes.
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "slow-tool" },
-            TestContext.Current.CancellationToken);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "slow-tool" }, cancellationToken: TestContext.Current.CancellationToken);
 
         Assert.NotNull(result);
         Assert.Single(result.Content);
@@ -233,7 +232,7 @@ public class McpTaskStoreTests : ClientServerTestBase
         var message = failed.Error.GetProperty("message").GetString();
         Assert.NotNull(message);
         Assert.Contains("MRTR", message);
-        Assert.Contains(nameof(McpServerHandlers.CallToolWithTaskHandler), message);
+        Assert.Contains("tasks", message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -253,8 +252,7 @@ public class McpTaskStoreTests : ClientServerTestBase
         var ct = TestContext.Current.CancellationToken;
 
         // CallToolAsync will poll and resolve input requests automatically.
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "elicit-tool" }, ct);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "elicit-tool" }, cancellationToken: ct);
 
         Assert.NotNull(result);
         Assert.Equal("accepted", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
@@ -279,8 +277,7 @@ public class McpTaskStoreTests : ClientServerTestBase
         });
         var ct = TestContext.Current.CancellationToken;
 
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "sample-tool" }, ct);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "sample-tool" }, cancellationToken: ct);
 
         Assert.NotNull(result);
         Assert.Equal("sampled response", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
@@ -309,8 +306,7 @@ public class McpTaskStoreTests : ClientServerTestBase
         });
         var ct = TestContext.Current.CancellationToken;
 
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "roots-tool" }, ct);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "roots-tool" }, cancellationToken: ct);
 
         Assert.NotNull(result);
         Assert.Equal("file:///workspace,file:///other", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
@@ -328,12 +324,12 @@ public class McpTaskStoreTests : ClientServerTestBase
         var ct = TestContext.Current.CancellationToken;
 
         await using var registration = client.RegisterNotificationHandler(
-            NotificationMethods.TaskStatusNotification,
+            TaskMethods.StatusNotification,
             (notification, _) =>
             {
                 var typed = JsonSerializer.Deserialize<TaskStatusNotificationParams>(
                     notification.Params,
-                    McpJsonUtilities.DefaultOptions);
+                    McpTasksJsonUtilities.DefaultOptions);
                 if (typed is not null)
                 {
                     notifications.Writer.TryWrite(typed);
@@ -342,8 +338,7 @@ public class McpTaskStoreTests : ClientServerTestBase
                 return default;
             });
 
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "notifying-tool" }, ct);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "notifying-tool" }, cancellationToken: ct);
 
         Assert.Equal("notified", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
 
@@ -377,12 +372,12 @@ public class McpTaskStoreTests : ClientServerTestBase
         var ct = TestContext.Current.CancellationToken;
 
         await using var registration = client.RegisterNotificationHandler(
-            NotificationMethods.TaskStatusNotification,
+            TaskMethods.StatusNotification,
             (notification, _) =>
             {
                 var typed = JsonSerializer.Deserialize<TaskStatusNotificationParams>(
                     notification.Params,
-                    McpJsonUtilities.DefaultOptions);
+                    McpTasksJsonUtilities.DefaultOptions);
                 if (typed is FailedTaskNotificationParams)
                 {
                     notifications.Writer.TryWrite(typed);
@@ -393,8 +388,7 @@ public class McpTaskStoreTests : ClientServerTestBase
 
         // The tool emits a Failed notification then returns a normal result, so we isolate the
         // notification round-trip from the task-store's own failure handling.
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "failing-notify-tool" }, ct);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "failing-notify-tool" }, cancellationToken: ct);
 
         Assert.Equal("emitted-failed", Assert.IsType<TextContentBlock>(result.Content[0]).Text);
 
@@ -426,8 +420,7 @@ public class McpTaskStoreTests : ClientServerTestBase
         });
         var ct = TestContext.Current.CancellationToken;
 
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "elicit-tool" }, ct);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "elicit-tool" }, cancellationToken: ct);
 
         // The handler should be called exactly once despite potential multiple polls
         Assert.Equal(1, elicitCallCount);
@@ -516,7 +509,7 @@ public class McpTaskStoreTests : ClientServerTestBase
 
         var sw = System.Diagnostics.Stopwatch.StartNew();
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await client.CallToolAsync(new CallToolRequestParams { Name = "elicit-tool" }, ct));
+            await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "elicit-tool" }, cancellationToken: ct));
         sw.Stop();
 
         Assert.Equal("handler-failed", ex.Message);
@@ -602,8 +595,7 @@ public class McpTaskStoreTests : ClientServerTestBase
         });
         var ct = TestContext.Current.CancellationToken;
 
-        var result = await client.CallToolAsync(
-            new CallToolRequestParams { Name = "multi-elicit-tool" }, ct);
+        var result = await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "multi-elicit-tool" }, cancellationToken: ct);
 
         // Exactly two handler invocations — one per unique input request key.
         Assert.Equal(2, elicitCount);

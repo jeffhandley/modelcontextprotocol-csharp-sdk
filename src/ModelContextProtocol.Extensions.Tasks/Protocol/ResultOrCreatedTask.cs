@@ -31,8 +31,7 @@ public class ResultOrCreatedTask<TResult> where TResult : Result
     /// <param name="result">The standard result returned by the server.</param>
     public ResultOrCreatedTask(TResult result)
     {
-        Throw.IfNull(result);
-        _result = result;
+        _result = result ?? throw new ArgumentNullException(nameof(result));
     }
 
     /// <summary>
@@ -41,8 +40,7 @@ public class ResultOrCreatedTask<TResult> where TResult : Result
     /// <param name="taskCreated">The task creation result returned by the server.</param>
     public ResultOrCreatedTask(CreateTaskResult taskCreated)
     {
-        Throw.IfNull(taskCreated);
-        _taskCreated = taskCreated;
+        _taskCreated = taskCreated ?? throw new ArgumentNullException(nameof(taskCreated));
     }
 
     /// <summary>

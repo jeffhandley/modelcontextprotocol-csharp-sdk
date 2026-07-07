@@ -42,7 +42,6 @@ internal sealed partial class McpClientImpl : McpClient
     /// <param name="options">Options for the client, defining protocol version and capabilities.</param>
     /// <param name="loggerFactory">The logger factory.</param>
     internal McpClientImpl(ITransport transport, string endpointName, McpClientOptions? options, ILoggerFactory? loggerFactory)
-#pragma warning restore MCPEXP002
     {
         options ??= new();
 
@@ -179,10 +178,7 @@ internal sealed partial class McpClientImpl : McpClient
     public override Task<ClientCompletionDetails> Completion => _sessionHandler.CompletionTask;
 
     /// <inheritdoc/>
-    private protected override int MaxConsecutiveStuckPolls => _options.MaxConsecutiveStuckPolls;
-
-    /// <inheritdoc/>
-    private protected override async ValueTask<IDictionary<string, InputResponse>> ResolveInputRequestsAsync(
+    public override async ValueTask<IDictionary<string, InputResponse>> ResolveInputRequestsAsync(
         IDictionary<string, InputRequest> inputRequests,
         CancellationToken cancellationToken)
     {

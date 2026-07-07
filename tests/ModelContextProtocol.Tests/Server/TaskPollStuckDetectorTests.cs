@@ -1,8 +1,10 @@
 using Microsoft.Extensions.DependencyInjection;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using System.Runtime.InteropServices;
+using System.Text.Json;
 
 #pragma warning disable MCPEXP001
 
@@ -15,7 +17,7 @@ namespace ModelContextProtocol.Tests.Server;
 /// </summary>
 public class TaskPollStuckDetectorTests : ClientServerTestBase
 {
-    private int _pollCount = 0;
+    private readonly StuckInputRequiredStore _store = new();
 
     public TaskPollStuckDetectorTests(ITestOutputHelper testOutputHelper) : base(testOutputHelper)
     {
@@ -30,101 +32,126 @@ public class TaskPollStuckDetectorTests : ClientServerTestBase
         {
             options.Capabilities ??= new ServerCapabilities();
 
-            // CallTool always returns a CreateTaskResult with a tiny poll interval so the
-            // test exercises the threshold in well under a second.
-            options.Handlers.CallToolWithTaskHandler = (context, cancellationToken) =>
-            {
-                var taskId = Guid.NewGuid().ToString("N");
-                return new ValueTask<ResultOrCreatedTask<CallToolResult>>(new CreateTaskResult
-                {
-                    TaskId = taskId,
-                    Status = McpTaskStatus.InputRequired,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    LastUpdatedAt = DateTimeOffset.UtcNow,
-                    PollIntervalMs = 5,
-                    ResultType = "task",
-                });
-            };
-
-            // GetTask always reports InputRequired with NO outstanding input requests — the
-            // misbehaving-server condition the stuck-detector exists to break out of.
-            options.Handlers.GetTaskHandler = (context, cancellationToken) =>
-            {
-                Interlocked.Increment(ref _pollCount);
-
-                return new ValueTask<GetTaskResult>(new InputRequiredTaskResult
-                {
-                    TaskId = context.Params!.TaskId,
-                    CreatedAt = DateTimeOffset.UtcNow,
-                    LastUpdatedAt = DateTimeOffset.UtcNow,
-                    PollIntervalMs = 5,
-                    InputRequests = new Dictionary<string, InputRequest>(),
-                    ResultType = "complete",
-                });
-            };
-
-            // CancelTask must succeed since the client issues a best-effort cancel when it
-            // gives up; otherwise the cancel failure would mask the real exception.
-            options.Handlers.CancelTaskHandler = (context, cancellationToken) =>
-                new ValueTask<CancelTaskResult>(new CancelTaskResult { ResultType = "complete" });
-
-            // UpdateTask is never invoked in this scenario (there are no input requests to resolve)
-            // but must be present so the handler-configuration validation passes.
-            options.Handlers.UpdateTaskHandler = (context, cancellationToken) =>
-                new ValueTask<UpdateTaskResult>(new UpdateTaskResult { ResultType = "complete" });
+            // The store always reports the task as InputRequired with no outstanding input
+            // requests, which is the misbehaving-server condition the stuck-detector exists
+            // to break out of.
+            options.WithTasks(_store);
         });
+
+        mcpServerBuilder.WithTools([McpServerTool.Create(
+            (CancellationToken ct) => "ok",
+            new() { Name = "any-tool" })]);
     }
 
     [Fact]
-    public async Task CallToolAsync_TaskStuckInInputRequired_WithoutNewRequests_ThrowsAfterThreshold()
+    public async Task CallToolAsTaskAsync_TaskStuckInInputRequired_WithoutNewRequests_ThrowsAfterThreshold()
     {
         await using var client = await CreateMcpClientForServer();
         var ct = TestContext.Current.CancellationToken;
 
         var ex = await Assert.ThrowsAsync<McpException>(async () =>
-            await client.CallToolAsync(new CallToolRequestParams { Name = "any-tool" }, ct));
+            await client.CallToolAsTaskAsync(new CallToolRequestParams { Name = "any-tool" }, cancellationToken: ct));
 
         Assert.Contains(McpTaskStatus.InputRequired.ToString(), ex.Message);
         Assert.Contains("consecutive polls", ex.Message);
 
-        Assert.Equal(60, _pollCount);
+        Assert.Equal(McpClientTasksExtensions.DefaultMaxConsecutiveStuckPolls, _store.PollCount);
     }
 
     [Fact]
-    public async Task CallToolAsync_StuckDetector_HonorsConfiguredThreshold()
+    public async Task CallToolAsTaskAsync_StuckDetector_HonorsConfiguredThreshold()
     {
-        // Verifies McpClientOptions.MaxConsecutiveStuckPolls is plumbed into PollTaskToCompletionAsync:
+        // Verifies the maxConsecutiveStuckPolls argument is plumbed into PollTaskToCompletionAsync:
         // a smaller configured threshold is surfaced verbatim in the McpException message.
         const int CustomThreshold = 3;
 
-        await using var client = await CreateMcpClientForServer(new McpClientOptions
-        {
-            MaxConsecutiveStuckPolls = CustomThreshold,
-        });
+        await using var client = await CreateMcpClientForServer();
         var ct = TestContext.Current.CancellationToken;
 
         var ex = await Assert.ThrowsAsync<McpException>(async () =>
-            await client.CallToolAsync(new CallToolRequestParams { Name = "any-tool" }, ct));
+            await client.CallToolAsTaskAsync(
+                new CallToolRequestParams { Name = "any-tool" },
+                maxConsecutiveStuckPolls: CustomThreshold,
+                cancellationToken: ct));
 
         // The message embeds the configured threshold, which is the strongest signal that the
-        // option value (not the 60-default constant) is what governed the loop.
+        // argument value (not the default constant) is what governed the loop.
         Assert.Contains($"{CustomThreshold} consecutive polls", ex.Message);
-        Assert.Equal(CustomThreshold, _pollCount);
+        Assert.Equal(CustomThreshold, _store.PollCount);
     }
 
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
     [InlineData(int.MinValue)]
-    public void McpClientOptions_MaxConsecutiveStuckPolls_RejectsNonPositive(int value)
+    public async Task CallToolAsTaskAsync_MaxConsecutiveStuckPolls_RejectsNonPositive(int value)
     {
-        var options = new McpClientOptions();
-        Assert.Throws<ArgumentOutOfRangeException>(() => options.MaxConsecutiveStuckPolls = value);
+        await using var client = await CreateMcpClientForServer();
+        var ct = TestContext.Current.CancellationToken;
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () =>
+            await client.CallToolAsTaskAsync(
+                new CallToolRequestParams { Name = "any-tool" },
+                maxConsecutiveStuckPolls: value,
+                cancellationToken: ct));
     }
 
     [Fact]
-    public void McpClientOptions_MaxConsecutiveStuckPolls_DefaultsTo60()
+    public void DefaultMaxConsecutiveStuckPolls_Is60()
     {
-        Assert.Equal(60, new McpClientOptions().MaxConsecutiveStuckPolls);
+        Assert.Equal(60, McpClientTasksExtensions.DefaultMaxConsecutiveStuckPolls);
+    }
+
+    /// <summary>
+    /// A task store that always reports the task as <see cref="McpTaskStatus.InputRequired"/> with no
+    /// outstanding input requests, simulating a misbehaving server that never makes progress.
+    /// </summary>
+    private sealed class StuckInputRequiredStore : IMcpTaskStore
+    {
+        private int _pollCount;
+
+        public int PollCount => Volatile.Read(ref _pollCount);
+
+        public event Action<InputResponseReceivedEventArgs>? InputResponseReceived
+        {
+            add { }
+            remove { }
+        }
+
+        public Task<McpTaskInfo> CreateTaskAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new McpTaskInfo(
+                Guid.NewGuid().ToString("N"),
+                McpTaskStatus.Working,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                PollIntervalMs: 5));
+
+        public Task<McpTaskInfo?> GetTaskAsync(string taskId, CancellationToken cancellationToken = default)
+        {
+            Interlocked.Increment(ref _pollCount);
+
+            return Task.FromResult<McpTaskInfo?>(new McpTaskInfo(
+                taskId,
+                McpTaskStatus.InputRequired,
+                DateTimeOffset.UtcNow,
+                DateTimeOffset.UtcNow,
+                PollIntervalMs: 5,
+                InputRequests: new Dictionary<string, InputRequest>()));
+        }
+
+        public Task SetCompletedAsync(string taskId, JsonElement result, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task SetFailedAsync(string taskId, JsonElement error, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task<bool> SetCancelledAsync(string taskId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(true);
+
+        public Task ResolveInputRequestsAsync(string taskId, IDictionary<string, InputResponse> inputResponses, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
+
+        public Task SetInputRequestsAsync(string taskId, IDictionary<string, InputRequest> inputRequests, CancellationToken cancellationToken = default) =>
+            Task.CompletedTask;
     }
 }

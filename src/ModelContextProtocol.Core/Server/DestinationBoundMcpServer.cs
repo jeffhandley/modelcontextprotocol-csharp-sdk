@@ -51,8 +51,8 @@ internal sealed class DestinationBoundMcpServer(McpServerImpl server, ITransport
     {
         // When an MRTR context is active, intercept server-to-client requests (sampling, elicitation, roots)
         // and route them through the MRTR mechanism instead of sending them over the wire.
-        // Task-augmented requests (SampleAsTaskAsync/ElicitAsTaskAsync) have a "task" property on their params
-        // and expect a CreateTaskResult response, so they must bypass MRTR and go over the wire.
+        // Requests carrying a "task" property on their params are part of a bolt-on task extension flow
+        // and expect a task-creation response, so they must bypass MRTR and go over the wire.
         if (ActiveMrtrContext is { } mrtrContext &&
             !(request.Params is JsonObject paramsObj && paramsObj.ContainsKey("task")))
         {
