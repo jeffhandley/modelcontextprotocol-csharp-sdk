@@ -2,6 +2,7 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
 using System.Text.Json;
+using McpTaskStatus = ModelContextProtocol.Extensions.Tasks.McpTaskStatus;
 
 #pragma warning disable MCPEXP001
 

@@ -428,6 +428,12 @@ public class McpServerTests : LoggedTest
             Tools = new ToolsCapability(),
             Completions = new CompletionsCapability(),
             Extensions = new Dictionary<string, object> { ["io.test"] = new JsonObject() },
+            AdditionalProperties = new Dictionary<string, JsonElement>
+            {
+                ["legacyTest"] = JsonSerializer.SerializeToElement(
+                    new JsonObject(),
+                    McpJsonUtilities.DefaultOptions.GetTypeInfo<JsonNode>()),
+            },
         };
 
         await Can_Handle_Requests(

@@ -35,8 +35,8 @@ public sealed class McpServerOptions
     /// <remarks>
     /// <para>
     /// The protocol version defines which features and message formats this server supports. Supported
-    /// values are <c>2024-11-05</c>, <c>2025-03-26</c>, <c>2025-06-18</c>, <c>2025-11-25</c>, and
-    /// <c>2026-07-28</c>.
+    /// values are <c>2024-11-05</c>, <c>2025-03-26</c>, <c>2025-06-18</c>, <c>2025-11-25</c>,
+    /// <c>2025-11-30</c>, and <c>2026-07-28</c>.
     /// </para>
     /// <para>
     /// If <see langword="null"/>, the server supports all of the versions listed above. For clients using

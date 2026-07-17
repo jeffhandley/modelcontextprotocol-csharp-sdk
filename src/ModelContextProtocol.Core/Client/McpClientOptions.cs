@@ -53,7 +53,7 @@ public sealed class McpClientOptions
     /// <remarks>
     /// <para>
     /// Supported values are <c>2024-11-05</c>, <c>2025-03-26</c>, <c>2025-06-18</c>, <c>2025-11-25</c>,
-    /// and <c>2026-07-28</c>.
+    /// <c>2025-11-30</c>, and <c>2026-07-28</c>.
     /// </para>
     /// <para>
     /// When <see langword="null"/> (the default), the client prefers the latest revision (<c>2026-07-28</c>),

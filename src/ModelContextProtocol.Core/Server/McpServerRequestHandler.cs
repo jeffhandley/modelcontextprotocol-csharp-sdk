@@ -25,6 +25,16 @@ public sealed class McpServerRequestHandler
     public required string Method { get; init; }
 
     /// <summary>
+    /// Gets an optional predicate that determines whether this handler applies to an incoming request.
+    /// </summary>
+    /// <remarks>
+    /// When multiple custom handlers register the same method, each handler must specify this
+    /// predicate. The first applicable handler is invoked, allowing extensions to share a method
+    /// name while dispatching by negotiated protocol version or another request characteristic.
+    /// </remarks>
+    public Func<JsonRpcRequest, bool>? IsApplicable { get; init; }
+
+    /// <summary>
     /// Gets the handler function that processes incoming requests for the specified method.
     /// </summary>
     /// <remarks>

@@ -5,6 +5,8 @@ using ModelContextProtocol.Server;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
+using CreateTaskResult = ModelContextProtocol.Extensions.Tasks.CreateTaskResult;
+using McpTaskStatus = ModelContextProtocol.Extensions.Tasks.McpTaskStatus;
 
 namespace ModelContextProtocol.Tests.Server;
 

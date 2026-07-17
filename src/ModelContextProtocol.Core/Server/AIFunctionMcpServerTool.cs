@@ -264,6 +264,7 @@ internal sealed partial class AIFunctionMcpServerTool : McpServerTool
             Annotations = ProtocolTool.Annotations,
             Icons = ProtocolTool.Icons,
             Meta = ProtocolTool.Meta,
+            AdditionalProperties = ProtocolTool.AdditionalProperties,
         };
     }
 

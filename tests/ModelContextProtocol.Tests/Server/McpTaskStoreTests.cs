@@ -7,6 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Channels;
+using GetTaskResult = ModelContextProtocol.Extensions.Tasks.GetTaskResult;
+using McpTaskStatus = ModelContextProtocol.Extensions.Tasks.McpTaskStatus;
 
 #pragma warning disable MCPEXP001
 

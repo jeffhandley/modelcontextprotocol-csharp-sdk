@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>$(DefaultTestTargetFrameworks)</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>ModelContextProtocol.Legacy.Tasks.Tests</RootNamespace>
+    <NoWarn>$(NoWarn);MCP9007</NoWarn>
+    <!-- Without this, tests are currently not showing results until all tests complete. -->
+    <DisableTestingPlatformServerCapability>true</DisableTestingPlatformServerCapability>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Common\Utils\DelegatingTestOutputHelper.cs" Link="Utils\DelegatingTestOutputHelper.cs" />
+    <Compile Include="..\Common\Utils\LoggedTest.cs" Link="Utils\LoggedTest.cs" />
+    <Compile Include="..\Common\Utils\MockLoggerProvider.cs" Link="Utils\MockLoggerProvider.cs" />
+    <Compile Include="..\Common\Utils\XunitLoggerProvider.cs" Link="Utils\XunitLoggerProvider.cs" />
+    <Compile Include="..\ModelContextProtocol.Tests\ClientServerTestBase.cs" Link="ClientServerTestBase.cs" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <Compile Include="..\..\src\Common\Throw.cs" Link="Throw.cs" />
+    <Compile Include="..\..\src\Common\Polyfills\**\*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\ModelContextProtocol\ModelContextProtocol.csproj" />
+    <ProjectReference Include="..\..\src\ModelContextProtocol.Extensions.Tasks\ModelContextProtocol.Extensions.Tasks.csproj" />
+    <ProjectReference Include="..\..\src\ModelContextProtocol.Legacy.Tasks-2025-11-30\ModelContextProtocol.Legacy.Tasks-2025-11-30.csproj" />
+  </ItemGroup>
+
+</Project>
