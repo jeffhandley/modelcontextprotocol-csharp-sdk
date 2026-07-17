@@ -4,10 +4,11 @@ using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Legacy.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using ModelContextProtocol.Tests;
 using System.ComponentModel;
 using System.Text.Json;
 
-namespace ModelContextProtocol.Tests.Server;
+namespace ModelContextProtocol.Legacy.Tasks.Tests;
 
 public class LegacyTasksCompatibilityTests(ITestOutputHelper testOutputHelper) : ClientServerTestBase(testOutputHelper)
 {

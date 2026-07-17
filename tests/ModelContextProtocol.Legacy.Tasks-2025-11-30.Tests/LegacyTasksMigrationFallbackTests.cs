@@ -3,10 +3,12 @@ using ModelContextProtocol.Client;
 using ModelContextProtocol.Legacy.Tasks;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using ModelContextProtocol.Tests;
+using ModelContextProtocol.Tests.Utils;
 using System.ComponentModel;
 using System.Text.Json;
 
-namespace ModelContextProtocol.Tests.Server;
+namespace ModelContextProtocol.Legacy.Tasks.Tests;
 
 public class LegacyTasksMigrationFallbackTests(ITestOutputHelper testOutputHelper) : ClientServerTestBase(testOutputHelper)
 {
