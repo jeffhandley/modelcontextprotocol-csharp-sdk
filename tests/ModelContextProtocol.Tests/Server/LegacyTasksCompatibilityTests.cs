@@ -20,7 +20,7 @@ public class LegacyTasksCompatibilityTests(ITestOutputHelper testOutputHelper) :
     }
 
     [Fact]
-    public async Task LegacyProtocol_ExposesTaskLifecycleAlongsideCurrentSdk()
+    public async Task LegacyProtocol_ExposesTaskLifecycleAlongsideModernSdk()
     {
         var clientOptions = new McpClientOptions().EnableLegacyTasks();
         await using var client = await CreateMcpClientForServer(clientOptions);
@@ -83,7 +83,7 @@ public class LegacyTasksCompatibilityTests(ITestOutputHelper testOutputHelper) :
     }
 
     [Fact]
-    public async Task CurrentProtocol_UsesCurrentTasksWhenLegacyTasksAreAlsoRegistered()
+    public async Task ModernProtocol_UsesModernTasksWhenLegacyTasksAreAlsoRegistered()
     {
         await using var client = await CreateMcpClientForServer();
         var cancellationToken = TestContext.Current.CancellationToken;
@@ -102,7 +102,7 @@ public class LegacyTasksCompatibilityTests(ITestOutputHelper testOutputHelper) :
     }
 
     [Fact]
-    public async Task TaskMigration_UsesCurrentTasksWithoutInfluencingProtocolNegotiation()
+    public async Task TaskMigration_UsesModernTasksWithoutInfluencingProtocolNegotiation()
     {
         var clientOptions = new McpClientOptions().EnableTasksMigration();
         Assert.Null(clientOptions.ProtocolVersion);
@@ -112,7 +112,7 @@ public class LegacyTasksCompatibilityTests(ITestOutputHelper testOutputHelper) :
         var migrationClient = client.CreateTaskMigrationClient();
         var cancellationToken = TestContext.Current.CancellationToken;
 
-        Assert.Equal(McpTaskMigrationMode.Current, migrationClient.Mode);
+        Assert.Equal(McpTaskMigrationMode.Modern, migrationClient.Mode);
         var taskTool = Assert.Single(
             await client.ListToolsAsync(cancellationToken: cancellationToken),
             tool => tool.Name == "legacy-echo");
@@ -123,7 +123,7 @@ public class LegacyTasksCompatibilityTests(ITestOutputHelper testOutputHelper) :
             cancellationToken);
 
         Assert.True(started.IsTask);
-        Assert.NotNull(started.CurrentTask);
+        Assert.NotNull(started.ModernTask);
         Assert.Null(started.LegacyTask);
 
         var result = await migrationClient.CallToolWithPollingAsync(

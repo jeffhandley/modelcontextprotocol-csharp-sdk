@@ -17,7 +17,7 @@ CallToolResult result = await tasks.CallToolWithPollingAsync(
     new() { Name = "long-running-tool" });
 ```
 
-`EnableTasksMigration` advertises the legacy top-level `tasks` capability but does not set `McpClientOptions.ProtocolVersion`. The SDK therefore uses its standard protocol negotiation and fallback behavior. Create `McpTaskMigrationClient` only after connection: it delegates to current Tasks for `2026-07-28` or later and to legacy Tasks for exactly `2025-11-30`. Its optional logger emits an Information-level record naming every server for which legacy Tasks is selected.
+`EnableTasksMigration` advertises the legacy top-level `tasks` capability but does not set `McpClientOptions.ProtocolVersion`. The SDK therefore uses its standard protocol negotiation and fallback behavior. Create `McpTaskMigrationClient` only after connection: it delegates to modern Tasks for `2026-07-28` or later and to legacy Tasks for exactly `2025-11-30`. Its optional logger emits an Information-level record naming every server for which legacy Tasks is selected.
 
 For a single execution pipeline, call `McpTaskMigrationClient.ExecuteToolAsync` with the `McpClientTool` returned by `ListToolsAsync` and its request parameters. On a legacy connection it enters the task/polling path only when the tool metadata contains:
 
@@ -27,7 +27,7 @@ For a single execution pipeline, call `McpTaskMigrationClient.ExecuteToolAsync` 
 }
 ```
 
-Tools without that property use the ordinary `tools/call` path. On a current connection, the server-level `io.modelcontextprotocol/tasks` extension capability indicates task support.
+Tools without that property use the ordinary `tools/call` path. On a modern connection, the server-level `io.modelcontextprotocol/tasks` extension capability indicates task support.
 
 `EnableLegacyTasks` remains available for clients that intentionally pin themselves to `2025-11-30`. It pins the protocol version and is not the migration path.
 

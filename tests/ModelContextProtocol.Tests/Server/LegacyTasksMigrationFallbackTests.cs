@@ -44,7 +44,7 @@ public class LegacyTasksMigrationFallbackTests(ITestOutputHelper testOutputHelpe
 
         Assert.True(started.IsTask);
         Assert.NotNull(started.LegacyTask);
-        Assert.Null(started.CurrentTask);
+        Assert.Null(started.ModernTask);
 
         var result = await migrationClient.CallToolWithPollingAsync(
             new CallToolRequestParams { Name = "legacy-echo" },

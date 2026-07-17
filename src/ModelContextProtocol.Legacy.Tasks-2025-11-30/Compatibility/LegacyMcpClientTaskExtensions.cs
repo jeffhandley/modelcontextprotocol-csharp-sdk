@@ -10,7 +10,7 @@ namespace ModelContextProtocol.Client;
 /// <summary>Provides source-compatible client APIs for the 2025-11-30 Tasks draft.</summary>
 /// <remarks>
 /// These extension methods retain the 1.x method names for a source migration. They require a
-/// client that negotiated <c>2025-11-30</c>; use the current Tasks extension for newer protocols.
+/// client that negotiated <c>2025-11-30</c>; use the modern Tasks extension for newer protocols.
 /// </remarks>
 [Obsolete(LegacyTasksApiObsoletion.Message, DiagnosticId = LegacyTasksApiObsoletion.DiagnosticId, UrlFormat = LegacyTasksApiObsoletion.Url)]
 public static class LegacyMcpClientTaskExtensions
@@ -75,7 +75,7 @@ public static class LegacyMcpClientTaskExtensions
             cancellationToken).ConfigureAwait(false));
     }
 
-    /// <summary>Gets the current state of a legacy task.</summary>
+    /// <summary>Gets the state of a legacy task.</summary>
     public static async ValueTask<McpTask> GetTaskAsync(
         this McpClient client,
         string taskId,

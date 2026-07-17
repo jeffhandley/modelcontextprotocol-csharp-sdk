@@ -10,7 +10,7 @@ public sealed class McpLegacyTask
     [JsonPropertyName("taskId")]
     public required string TaskId { get; set; }
 
-    /// <summary>Gets or sets the current status.</summary>
+    /// <summary>Gets or sets the legacy task status.</summary>
     [JsonPropertyName("status")]
     public required McpLegacyTaskStatus Status { get; set; }
 

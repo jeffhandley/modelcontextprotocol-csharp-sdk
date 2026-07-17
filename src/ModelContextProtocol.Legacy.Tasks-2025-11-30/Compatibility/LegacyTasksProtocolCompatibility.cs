@@ -145,7 +145,7 @@ public sealed class ListTasksRequestParams
 [Obsolete(LegacyTasksApiObsoletion.Message, DiagnosticId = LegacyTasksApiObsoletion.DiagnosticId, UrlFormat = LegacyTasksApiObsoletion.Url)]
 public sealed class ListTasksResult
 {
-    /// <summary>Gets or sets the tasks in the current page.</summary>
+    /// <summary>Gets or sets the tasks in this legacy task page.</summary>
     [JsonPropertyName("tasks")]
     public required IList<McpTask> Tasks { get; set; }
 

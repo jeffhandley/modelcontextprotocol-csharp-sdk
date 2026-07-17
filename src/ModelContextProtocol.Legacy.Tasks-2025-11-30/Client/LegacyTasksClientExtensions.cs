@@ -115,7 +115,7 @@ public static class LegacyTasksClientExtensions
         return new LegacyTaskCallResult(callResult);
     }
 
-    /// <summary>Gets the current status of a legacy task.</summary>
+    /// <summary>Gets the status of a legacy task.</summary>
     public static ValueTask<GetLegacyTaskResult> GetLegacyTaskAsync(
         this McpClient client,
         string taskId,

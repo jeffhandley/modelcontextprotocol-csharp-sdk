@@ -13,11 +13,11 @@ public enum McpTaskMigrationMode
     Legacy,
 
     /// <summary>The 2026-07-28 or later Tasks extension is active.</summary>
-    Current,
+    Modern,
 }
 
 /// <summary>
-/// Provides a post-negotiation facade over the legacy and current MCP Tasks implementations.
+/// Provides a post-negotiation facade over the legacy and modern MCP Tasks implementations.
 /// </summary>
 /// <remarks>
 /// Create an instance after connecting an <see cref="McpClient"/>. The facade does not alter
@@ -41,7 +41,7 @@ public sealed class McpTaskMigrationClient
     /// </summary>
     /// <remarks>
     /// For the legacy draft, this method reads the <c>execution.taskSupport</c> property from the
-    /// tool returned by <c>tools/list</c>. For the current Tasks extension, task support is a
+    /// tool returned by <c>tools/list</c>. For the modern Tasks extension, task support is a
     /// server-level extension capability and applies to all tools registered with that extension.
     /// </remarks>
     public bool SupportsTaskExecution(McpClientTool tool)
@@ -51,7 +51,7 @@ public sealed class McpTaskMigrationClient
             throw new ArgumentNullException(nameof(tool));
         }
 
-        if (Mode == McpTaskMigrationMode.Current)
+        if (Mode == McpTaskMigrationMode.Modern)
         {
             return _client.ServerCapabilities.Extensions?.ContainsKey(TasksProtocol.ExtensionId) is true;
         }
@@ -109,12 +109,12 @@ public sealed class McpTaskMigrationClient
             throw new ArgumentNullException(nameof(requestParams));
         }
 
-        if (Mode == McpTaskMigrationMode.Current)
+        if (Mode == McpTaskMigrationMode.Modern)
         {
-            var currentResult = await _client.CallToolAsTaskAsync(requestParams, cancellationToken).ConfigureAwait(false);
-            return currentResult.IsTask
-                ? new McpTaskMigrationCallResult(Mode, currentResult.TaskCreated!)
-                : new McpTaskMigrationCallResult(Mode, currentResult.Result!);
+            var modernResult = await _client.CallToolAsTaskAsync(requestParams, cancellationToken).ConfigureAwait(false);
+            return modernResult.IsTask
+                ? new McpTaskMigrationCallResult(Mode, modernResult.TaskCreated!)
+                : new McpTaskMigrationCallResult(Mode, modernResult.Result!);
         }
 
         var legacyResult = await _client.CallToolAsLegacyTaskAsync(requestParams, cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -134,7 +134,7 @@ public sealed class McpTaskMigrationClient
             throw new ArgumentNullException(nameof(requestParams));
         }
 
-        if (Mode == McpTaskMigrationMode.Current)
+        if (Mode == McpTaskMigrationMode.Modern)
         {
             return await _client.CallToolWithPollingAsync(
                 requestParams,
@@ -166,7 +166,7 @@ public static class McpTaskMigrationClientExtensions
     /// </param>
     /// <returns>A facade bound to the Tasks implementation for the negotiated protocol version.</returns>
     /// <exception cref="InvalidOperationException">
-    /// The client did not negotiate the legacy Tasks protocol or a version supporting the current Tasks extension.
+    /// The client did not negotiate the legacy Tasks protocol or a version supporting the modern Tasks extension.
     /// </exception>
     public static McpTaskMigrationClient CreateTaskMigrationClient(this McpClient client, ILogger? logger = null)
     {
@@ -177,7 +177,7 @@ public static class McpTaskMigrationClientExtensions
 
         if (McpProtocolVersions.IsJuly2026OrLaterProtocolVersion(client.NegotiatedProtocolVersion))
         {
-            return new McpTaskMigrationClient(client, McpTaskMigrationMode.Current);
+            return new McpTaskMigrationClient(client, McpTaskMigrationMode.Modern);
         }
 
         if (string.Equals(client.NegotiatedProtocolVersion, LegacyTasksProtocol.ProtocolVersion, StringComparison.Ordinal))
@@ -215,14 +215,14 @@ public sealed class McpTaskMigrationCallResult
     internal McpTaskMigrationCallResult(McpTaskMigrationMode mode, ModelContextProtocol.Extensions.Tasks.CreateTaskResult task)
     {
         Mode = mode;
-        CurrentTask = task;
+        ModernTask = task;
     }
 
     /// <summary>Gets the Tasks implementation that produced this result.</summary>
     public McpTaskMigrationMode Mode { get; }
 
     /// <summary>Gets whether the server created a task.</summary>
-    public bool IsTask => LegacyTask is not null || CurrentTask is not null;
+    public bool IsTask => LegacyTask is not null || ModernTask is not null;
 
     /// <summary>Gets the immediate tool result when <see cref="IsTask"/> is <see langword="false"/>.</summary>
     public CallToolResult? Result { get; }
@@ -231,5 +231,5 @@ public sealed class McpTaskMigrationCallResult
     public McpLegacyTask? LegacyTask { get; }
 
     /// <summary>Gets the task created by the 2026-07-28 or later Tasks extension.</summary>
-    public ModelContextProtocol.Extensions.Tasks.CreateTaskResult? CurrentTask { get; }
+    public ModelContextProtocol.Extensions.Tasks.CreateTaskResult? ModernTask { get; }
 }

@@ -10,7 +10,7 @@ public interface ILegacyMcpTaskStore
         McpLegacyTaskMetadata metadata,
         CancellationToken cancellationToken = default);
 
-    /// <summary>Gets the current state of a task.</summary>
+    /// <summary>Gets the state of a legacy task.</summary>
     Task<McpLegacyTask?> GetTaskAsync(string taskId, CancellationToken cancellationToken = default);
 
     /// <summary>Stores the terminal result of a task.</summary>

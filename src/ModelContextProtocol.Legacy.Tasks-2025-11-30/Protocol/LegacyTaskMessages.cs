@@ -26,7 +26,7 @@ public sealed class GetLegacyTaskResult
     [JsonPropertyName("taskId")]
     public required string TaskId { get; set; }
 
-    /// <summary>Gets or sets the current task status.</summary>
+    /// <summary>Gets or sets the legacy task status.</summary>
     [JsonPropertyName("status")]
     public required McpLegacyTaskStatus Status { get; set; }
 
@@ -64,7 +64,7 @@ public sealed class ListLegacyTasksRequestParams
 /// <summary>Represents the result of a legacy <c>tasks/list</c> request.</summary>
 public sealed class ListLegacyTasksResult
 {
-    /// <summary>Gets or sets the tasks in the current page.</summary>
+    /// <summary>Gets or sets the tasks in this legacy task page.</summary>
     [JsonPropertyName("tasks")]
     public required IList<McpLegacyTask> Tasks { get; set; }
 
@@ -130,7 +130,7 @@ public sealed class LegacyTaskStatusNotificationParams
     [JsonPropertyName("taskId")]
     public required string TaskId { get; set; }
 
-    /// <summary>Gets or sets the current task status.</summary>
+    /// <summary>Gets or sets the legacy task status.</summary>
     [JsonPropertyName("status")]
     public required McpLegacyTaskStatus Status { get; set; }
 
