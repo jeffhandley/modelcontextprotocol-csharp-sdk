@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using GetTaskRequestParams = ModelContextProtocol.Extensions.Tasks.GetTaskRequestParams;
 
 namespace ModelContextProtocol.Tests.Server;
 

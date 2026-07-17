@@ -6,6 +6,9 @@ using ModelContextProtocol.Server;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CreateTaskResult = ModelContextProtocol.Extensions.Tasks.CreateTaskResult;
+using GetTaskRequestParams = ModelContextProtocol.Extensions.Tasks.GetTaskRequestParams;
+using McpTaskStatus = ModelContextProtocol.Extensions.Tasks.McpTaskStatus;
 
 #pragma warning disable MCPEXP001, MCPEXP002
 

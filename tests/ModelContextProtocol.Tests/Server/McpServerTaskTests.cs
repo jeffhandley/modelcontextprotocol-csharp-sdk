@@ -1,5 +1,9 @@
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
+using GetTaskResult = ModelContextProtocol.Extensions.Tasks.GetTaskResult;
+using McpTaskStatus = ModelContextProtocol.Extensions.Tasks.McpTaskStatus;
+using CreateTaskResult = ModelContextProtocol.Extensions.Tasks.CreateTaskResult;
+using GetTaskRequestParams = ModelContextProtocol.Extensions.Tasks.GetTaskRequestParams;
 using ModelContextProtocol.Server;
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.InteropServices;

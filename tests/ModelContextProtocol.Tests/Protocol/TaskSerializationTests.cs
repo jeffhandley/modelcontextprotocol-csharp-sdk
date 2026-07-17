@@ -1,7 +1,10 @@
 using ModelContextProtocol.Extensions.Tasks;
 using ModelContextProtocol.Protocol;
+using McpTaskStatus = ModelContextProtocol.Extensions.Tasks.McpTaskStatus;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CreateTaskResult = ModelContextProtocol.Extensions.Tasks.CreateTaskResult;
+using GetTaskResult = ModelContextProtocol.Extensions.Tasks.GetTaskResult;
 
 namespace ModelContextProtocol.Tests.Protocol;
 

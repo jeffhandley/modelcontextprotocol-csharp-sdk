@@ -212,7 +212,7 @@ public sealed class McpTaskMigrationCallResult
         LegacyTask = task;
     }
 
-    internal McpTaskMigrationCallResult(McpTaskMigrationMode mode, CreateTaskResult task)
+    internal McpTaskMigrationCallResult(McpTaskMigrationMode mode, ModelContextProtocol.Extensions.Tasks.CreateTaskResult task)
     {
         Mode = mode;
         CurrentTask = task;
@@ -231,5 +231,5 @@ public sealed class McpTaskMigrationCallResult
     public McpLegacyTask? LegacyTask { get; }
 
     /// <summary>Gets the task created by the 2026-07-28 or later Tasks extension.</summary>
-    public CreateTaskResult? CurrentTask { get; }
+    public ModelContextProtocol.Extensions.Tasks.CreateTaskResult? CurrentTask { get; }
 }

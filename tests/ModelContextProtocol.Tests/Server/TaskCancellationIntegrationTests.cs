@@ -6,6 +6,7 @@ using ModelContextProtocol.Server;
 using ModelContextProtocol.Tests.Utils;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using GetTaskResult = ModelContextProtocol.Extensions.Tasks.GetTaskResult;
 
 #pragma warning disable MCPEXP001
 

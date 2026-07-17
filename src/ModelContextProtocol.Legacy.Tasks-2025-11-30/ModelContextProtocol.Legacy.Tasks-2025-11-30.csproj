@@ -7,7 +7,7 @@
     <PackageId>ModelContextProtocol.Legacy.Tasks-2025-11-30</PackageId>
     <Description>Compatibility implementation for the MCP Tasks draft from 2025-11-30</Description>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <NoWarn>$(NoWarn);MCPEXP001;MCPEXP002</NoWarn>
+    <NoWarn>$(NoWarn);CS0436;MCPEXP001;MCPEXP002;MCP9007</NoWarn>
     <EnablePackageValidation>false</EnablePackageValidation>
   </PropertyGroup>
 
@@ -24,6 +24,12 @@
     <Compile Remove="..\Common\Polyfills\**\*.cs" />
     <Compile Include="..\Common\Polyfills\System\Diagnostics\CodeAnalysis\ExperimentalAttribute.cs"
              Link="Polyfills\ExperimentalAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Diagnostics\CodeAnalysis\RequiresDynamicCodeAttribute.cs"
+             Link="Polyfills\RequiresDynamicCodeAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Diagnostics\CodeAnalysis\RequiresUnreferencedCode.cs"
+             Link="Polyfills\RequiresUnreferencedCode.cs" />
+    <Compile Include="..\Common\Polyfills\System\ObsoleteAttribute.cs"
+             Link="Polyfills\ObsoleteAttribute.cs" />
     <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\CompilerFeatureRequiredAttribute.cs"
              Link="Polyfills\CompilerFeatureRequiredAttribute.cs" />
     <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\IsExternalInit.cs"
