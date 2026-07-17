@@ -62,9 +62,9 @@ public static class McpTasksBuilderExtensions
             }
 
             options.RequestHandlers ??= new List<McpServerRequestHandler>();
-            options.RequestHandlers.Add(new McpServerRequestHandler { Method = TasksProtocol.MethodTasksGet, Handler = HandleGetTask });
-            options.RequestHandlers.Add(new McpServerRequestHandler { Method = TasksProtocol.MethodTasksUpdate, Handler = HandleUpdateTask });
-            options.RequestHandlers.Add(new McpServerRequestHandler { Method = TasksProtocol.MethodTasksCancel, Handler = HandleCancelTask });
+            options.RequestHandlers.Add(new McpServerRequestHandler { Method = TasksProtocol.MethodTasksGet, IsApplicable = IsJuly2026OrLaterProtocolRequest, Handler = HandleGetTask });
+            options.RequestHandlers.Add(new McpServerRequestHandler { Method = TasksProtocol.MethodTasksUpdate, IsApplicable = IsJuly2026OrLaterProtocolRequest, Handler = HandleUpdateTask });
+            options.RequestHandlers.Add(new McpServerRequestHandler { Method = TasksProtocol.MethodTasksCancel, IsApplicable = IsJuly2026OrLaterProtocolRequest, Handler = HandleCancelTask });
 
             // Use a filter rather than a handler so it wraps around Core's tool dispatch.
             // This ensures it intercepts tool calls BEFORE the tool is invoked, allowing

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Server;
@@ -84,4 +85,15 @@ public sealed class ClientCapabilities
     /// </remarks>
     [JsonPropertyName("extensions")]
     public IDictionary<string, object>? Extensions { get; set; }
+
+    /// <summary>
+    /// Gets or sets unrecognized capability properties for protocol extensions that define
+    /// top-level capability names.
+    /// </summary>
+    /// <remarks>
+    /// Extension packages should prefer <see cref="Extensions"/> when the negotiated protocol
+    /// supports it. This property preserves capability names defined by historical protocol revisions.
+    /// </remarks>
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalProperties { get; set; }
 }

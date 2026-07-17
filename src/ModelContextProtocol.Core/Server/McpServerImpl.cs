@@ -192,6 +192,14 @@ internal sealed partial class McpServerImpl : McpServer
                 bool hasProtocolVersionMeta = HasMetaKey(request, MetaKeys.ProtocolVersion);
                 bool hasReservedPerRequestMeta = TryGetPerRequestMetadataKey(request, out var reservedPerRequestMetaKey);
 
+                // Initialize-handshake protocols establish their version once per session. Surface that
+                // established version on later raw requests so extension handlers can gate their wire behavior.
+                if (context?.ProtocolVersion is null && _negotiatedProtocolVersion is { } negotiatedProtocolVersion)
+                {
+                    context ??= request.Context = new JsonRpcMessageContext();
+                    context.ProtocolVersion = negotiatedProtocolVersion;
+                }
+
                 if (context?.ProtocolVersion is { } protocolVersion)
                 {
                     bool protocolVersionAlreadyEstablished = _negotiatedProtocolVersion is not null;
@@ -994,6 +1002,7 @@ internal sealed partial class McpServerImpl : McpServer
     {
         ServerCapabilities.Experimental = options.Capabilities?.Experimental;
         ServerCapabilities.Extensions = options.Capabilities?.Extensions;
+        ServerCapabilities.AdditionalProperties = options.Capabilities?.AdditionalProperties;
     }
 
     private void ConfigureCustomRequestHandlers(McpServerOptions options)
@@ -1011,19 +1020,48 @@ internal sealed partial class McpServerImpl : McpServer
                 throw new InvalidOperationException(
                     $"A custom request handler registered through {nameof(McpServerOptions)}.{nameof(McpServerOptions.RequestHandlers)} has a null or empty {nameof(McpServerRequestHandler.Method)}.");
             }
+        }
+
+        foreach (var groupedHandlers in customHandlers.GroupBy(static entry => entry.Method, StringComparer.Ordinal))
+        {
+            McpServerRequestHandler[] handlers = [.. groupedHandlers];
+            string method = handlers[0].Method;
 
             // Custom handlers are registered after all built-in handlers, so a method already present
-            // belongs to a built-in method (e.g. initialize, tools/call) or an earlier custom handler.
-            // Silently overwriting it would bypass the built-in handler's filters and protocol gating,
-            // so reject the collision instead.
-            if (_requestHandlers.ContainsKey(entry.Method))
+            // belongs to a built-in method (e.g. initialize or tools/call). Silently overwriting it
+            // would bypass the built-in handler's filters and protocol gating, so reject the collision.
+            if (_requestHandlers.ContainsKey(method))
             {
                 throw new InvalidOperationException(
                     $"A custom request handler registered through {nameof(McpServerOptions)}.{nameof(McpServerOptions.RequestHandlers)} " +
-                    $"uses the method '{entry.Method}', which is already handled by the server. Custom handlers cannot replace built-in methods or other custom handlers.");
+                    $"uses the method '{method}', which is already handled by the server. Custom handlers cannot replace built-in methods or other custom handlers.");
             }
 
-            SetRawHandler(entry.Method, entry.Handler);
+            if (handlers.Length == 1)
+            {
+                SetRawHandler(method, handlers[0].Handler);
+                continue;
+            }
+
+            if (handlers.Any(static handler => handler.IsApplicable is null))
+            {
+                throw new InvalidOperationException(
+                    $"Multiple custom request handlers are registered for method '{method}'. " +
+                    $"Each handler must specify {nameof(McpServerRequestHandler.IsApplicable)} to share a method.");
+            }
+
+            SetRawHandler(method, async (request, cancellationToken) =>
+            {
+                foreach (var handler in handlers)
+                {
+                    if (handler.IsApplicable!(request))
+                    {
+                        return await handler.Handler(request, cancellationToken).ConfigureAwait(false);
+                    }
+                }
+
+                throw new McpProtocolException($"Method '{method}' is not available.", McpErrorCode.MethodNotFound);
+            });
         }
 #pragma warning restore MCPEXP002
     }

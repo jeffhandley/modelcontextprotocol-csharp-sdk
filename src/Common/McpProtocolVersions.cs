@@ -24,6 +24,15 @@ internal static class McpProtocolVersions
     /// </summary>
     public const string November2025ProtocolVersion = "2025-11-25";
 
+    /// <summary>
+    /// The 2025-11-30 MCP protocol revision that introduced the experimental Tasks protocol.
+    /// </summary>
+    /// <remarks>
+    /// This revision is retained only so compatibility packages can negotiate and implement
+    /// historical experimental protocol features. Core does not implement Tasks for this revision.
+    /// </remarks>
+    public const string November2025TasksProtocolVersion = "2025-11-30";
+
     /// <summary>The 2025-06-18 MCP protocol revision.</summary>
     public const string June2025ProtocolVersion = "2025-06-18";
 
@@ -42,6 +51,7 @@ internal static class McpProtocolVersions
         March2025ProtocolVersion,
         June2025ProtocolVersion,
         November2025ProtocolVersion,
+        November2025TasksProtocolVersion,
     ];
 
     /// <summary>

@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net10.0;net9.0;net8.0;netstandard2.0</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>ModelContextProtocol.Legacy.Tasks-2025-11-30</PackageId>
+    <Description>Compatibility implementation for the MCP Tasks draft from 2025-11-30</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <NoWarn>$(NoWarn);MCPEXP001;MCPEXP002</NoWarn>
+    <EnablePackageValidation>false</EnablePackageValidation>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(TargetFramework)' != 'netstandard2.0'">
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="..\Common\Experimentals.cs" Link="Experimentals.cs" />
+    <Compile Include="..\Common\McpProtocolVersions.cs" Link="McpProtocolVersions.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="..\Common\Polyfills\**\*.cs" />
+    <Compile Include="..\Common\Polyfills\System\Diagnostics\CodeAnalysis\ExperimentalAttribute.cs"
+             Link="Polyfills\ExperimentalAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\CompilerFeatureRequiredAttribute.cs"
+             Link="Polyfills\CompilerFeatureRequiredAttribute.cs" />
+    <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\IsExternalInit.cs"
+             Link="Polyfills\IsExternalInit.cs" />
+    <Compile Include="..\Common\Polyfills\System\Runtime\CompilerServices\RequiredMemberAttribute.cs"
+             Link="Polyfills\RequiredMemberAttribute.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ModelContextProtocol\ModelContextProtocol.csproj" />
+    <ProjectReference Include="..\ModelContextProtocol.Extensions.Tasks\ModelContextProtocol.Extensions.Tasks.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -145,6 +145,12 @@ public sealed class Tool : IBaseMetadata
     [JsonPropertyName("_meta")]
     public JsonObject? Meta { get; set; }
 
+    /// <summary>
+    /// Gets or sets unrecognized top-level tool properties defined by protocol extensions.
+    /// </summary>
+    [JsonExtensionData]
+    public IDictionary<string, JsonElement>? AdditionalProperties { get; set; }
+
     [DebuggerBrowsable(DebuggerBrowsableState.Never)]
     private string DebuggerDisplay
     {

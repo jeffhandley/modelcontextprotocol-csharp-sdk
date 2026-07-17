@@ -13,9 +13,10 @@ namespace ModelContextProtocol.Tests.Server;
 public class CustomRequestHandlerCollisionTests(ITestOutputHelper testOutputHelper) : LoggedTest(testOutputHelper)
 {
 #pragma warning disable MCPEXP002
-    private static McpServerRequestHandler CreateHandler(string method) => new()
+    private static McpServerRequestHandler CreateHandler(string method, Func<JsonRpcRequest, bool>? isApplicable = null) => new()
     {
         Method = method,
+        IsApplicable = isApplicable,
         Handler = (request, cancellationToken) => new ValueTask<JsonNode?>((JsonNode?)null),
     };
 
@@ -70,6 +71,23 @@ public class CustomRequestHandlerCollisionTests(ITestOutputHelper testOutputHelp
         var options = new McpServerOptions
         {
             RequestHandlers = [CreateHandler("custom/method")],
+        };
+
+        await using var server = McpServer.Create(transport, options, LoggerFactory);
+        Assert.NotNull(server);
+    }
+
+    [Fact]
+    public async Task CustomHandler_DuplicateCustomMethodWithPredicates_Succeeds()
+    {
+        await using var transport = new StreamServerTransport(Stream.Null, Stream.Null);
+        var options = new McpServerOptions
+        {
+            RequestHandlers =
+            [
+                CreateHandler("custom/method", _ => true),
+                CreateHandler("custom/method", _ => false),
+            ],
         };
 
         await using var server = McpServer.Create(transport, options, LoggerFactory);

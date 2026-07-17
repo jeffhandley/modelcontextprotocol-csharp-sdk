@@ -85,6 +85,7 @@
     <ProjectReference Include="..\..\src\ModelContextProtocol.Core\ModelContextProtocol.Core.csproj" />
     <ProjectReference Include="..\..\src\ModelContextProtocol.Extensions.Apps\ModelContextProtocol.Extensions.Apps.csproj" />
     <ProjectReference Include="..\..\src\ModelContextProtocol.Extensions.Tasks\ModelContextProtocol.Extensions.Tasks.csproj" />
+    <ProjectReference Include="..\..\src\ModelContextProtocol.Legacy.Tasks-2025-11-30\ModelContextProtocol.Legacy.Tasks-2025-11-30.csproj" />
     <ProjectReference Include="..\ModelContextProtocol.TestServer\ModelContextProtocol.TestServer.csproj" />
     <ProjectReference Include="..\..\samples\TestServerWithHosting\TestServerWithHosting.csproj" />
   </ItemGroup>
