@@ -24,23 +24,7 @@ MCP uses a [capability negotiation] mechanism during connection setup. Clients a
 
 Configure client capabilities when creating an MCP client:
 
-```csharp
-var options = new McpClientOptions
-{
-    Capabilities = new ClientCapabilities
-    {
-        Roots = new RootsCapability { ListChanged = true },
-        Sampling = new SamplingCapability(),
-        Elicitation = new ElicitationCapability
-        {
-            Form = new FormElicitationCapability(),
-            Url = new UrlElicitationCapability()
-        }
-    }
-};
-
-await using var client = await McpClient.CreateAsync(transport, options);
-```
+[!code-csharp[](Capabilities.cs?name=snippet_ClientCapabilities)]
 
 Handlers for each capability (roots, sampling, and elicitation) are covered in their respective documentation pages.
 
@@ -65,47 +49,7 @@ Before using an optional feature, check whether the other side declared the corr
 
 #### Check server capabilities from the client
 
-```csharp
-await using var client = await McpClient.CreateAsync(transport);
-
-// Check if the server supports tools
-if (client.ServerCapabilities.Tools is not null)
-{
-    var tools = await client.ListToolsAsync();
-}
-
-// Check if the server supports resources with subscriptions
-if (client.ServerCapabilities.Resources is { Subscribe: true })
-{
-    await client.SubscribeToResourceAsync("config://app/settings");
-}
-
-// Check if the server supports prompts with list-changed notifications
-if (client.ServerCapabilities.Prompts is { ListChanged: true })
-{
-    client.RegisterNotificationHandler(
-        NotificationMethods.PromptListChangedNotification,
-        async (notification, ct) =>
-        {
-            var prompts = await client.ListPromptsAsync(cancellationToken: ct);
-        });
-}
-
-// Check if the server supports logging
-if (client.ServerCapabilities.Logging is not null)
-{
-    await client.SetLoggingLevelAsync(LoggingLevel.Info);
-}
-
-// Check if the server supports completions
-if (client.ServerCapabilities.Completions is not null)
-{
-    var completions = await client.CompleteAsync(
-        new PromptReference { Name = "my_prompt" },
-        argumentName: "language",
-        argumentValue: "py");
-}
-```
+[!code-csharp[](Capabilities.cs?name=snippet_CheckServerCapabilities)]
 
 ### Protocol version negotiation
 

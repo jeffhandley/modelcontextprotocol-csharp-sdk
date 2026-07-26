@@ -55,13 +55,7 @@ The easiest way to enable the package's task store integration is to call
 passing an <xref:ModelContextProtocol.Extensions.Tasks.IMcpTaskStore>.
 The SDK ships <xref:ModelContextProtocol.Extensions.Tasks.InMemoryMcpTaskStore> for development and tests:
 
-```csharp
-using ModelContextProtocol.Extensions.Tasks;
-
-builder.Services.AddMcpServer()
-    .WithTools<MyTools>()
-    .WithTasks(new InMemoryMcpTaskStore());
-```
+[!code-csharp[](Tasks.cs?name=snippet_WithTasks)]
 
 When tasks are enabled with `WithTasks` the SDK automatically:
 
@@ -93,29 +87,7 @@ It returns a <xref:ModelContextProtocol.Protocol.ResultOrAlternate`1>, so each i
 between an immediate result and an alternate result such as a
 <xref:ModelContextProtocol.Extensions.Tasks.CreateTaskResult>:
 
-```csharp
-using ModelContextProtocol.Extensions.Tasks;
-
-options.Handlers.CallToolWithAlternateHandler = async (context, ct) =>
-{
-    if (ShouldRunInline(context.Params!))
-    {
-        return new CallToolResult { Content = [/* … */] };
-    }
-
-    var taskId = await StartBackgroundWorkAsync(context.Params!, ct);
-    var created = new CreateTaskResult
-    {
-        TaskId = taskId,
-        Status = McpTaskStatus.Working,
-        CreatedAt = DateTimeOffset.UtcNow,
-        LastUpdatedAt = DateTimeOffset.UtcNow,
-        PollIntervalMs = 1000,
-    };
-
-    return new ResultOrAlternate<CallToolResult>(created, McpTasksJsonContext.Default.CreateTaskResult);
-};
-```
+[!code-csharp[](Tasks.cs?name=snippet_CallToolWithAlternate)]
 
 > This low-level handler is mutually exclusive with `WithTasks`. When a store is configured, the
 > SDK does the wrapping for you and throws `InvalidOperationException` if the alternate handler also
@@ -145,13 +117,7 @@ handles the full task lifecycle automatically:
 - Returns the final <xref:ModelContextProtocol.Protocol.CallToolResult> when the task completes,
   or throws <xref:ModelContextProtocol.McpException> on `Failed`/`Cancelled`.
 
-```csharp
-using ModelContextProtocol.Extensions.Tasks;
-
-var result = await client.CallToolWithPollingAsync(
-    new CallToolRequestParams { Name = "long-running-tool", Arguments = arguments },
-    cancellationToken: cancellationToken);
-```
+[!code-csharp[](Tasks.cs?name=snippet_CallToolWithPolling)]
 
 #### Manual control
 
@@ -161,22 +127,7 @@ lifecycle yourself using <xref:ModelContextProtocol.Extensions.Tasks.McpTasksCli
 <xref:ModelContextProtocol.Extensions.Tasks.McpTasksClientExtensions.UpdateTaskAsync*>, and
 <xref:ModelContextProtocol.Extensions.Tasks.McpTasksClientExtensions.CancelTaskAsync*>:
 
-```csharp
-using ModelContextProtocol.Extensions.Tasks;
-
-var raw = await client.CallToolAsTaskAsync(requestParams, cancellationToken);
-if (raw.IsTask)
-{
-    var taskId = raw.TaskCreated!.TaskId;
-    while (true)
-    {
-        await Task.Delay(TimeSpan.FromMilliseconds(raw.TaskCreated.PollIntervalMs ?? 1000), cancellationToken);
-        var state = await client.GetTaskAsync(taskId, cancellationToken);
-        // Handle InputRequiredTaskResult by calling UpdateTaskAsync,
-        // CompletedTaskResult by deserializing its Result property, etc.
-    }
-}
-```
+[!code-csharp[](Tasks.cs?name=snippet_CallToolAsTask)]
 
 #### Stuck-task detector
 

@@ -38,25 +38,9 @@ The key concepts are:
 
 The simplest approach is to apply `[McpAppUi]` attributes to your tool methods and call `WithMcpApps()` on the server builder:
 
-```csharp
-[McpServerToolType]
-public class WeatherTools
-{
-    [McpServerTool, Description("Get current weather for a location")]
-    [McpAppUi(ResourceUri = "ui://weather/view.html")]
-    public static string GetWeather(string location) => $"Weather for {location}";
+[!code-csharp[](Apps.cs?name=snippet_AppsWeatherTools)]
 
-    [McpServerTool, Description("Get forecast (model-only tool)")]
-    [McpAppUi(ResourceUri = "ui://weather/forecast.html", Visibility = [McpUiToolVisibility.Model])]
-    public static string GetForecast(string location) => $"Forecast for {location}";
-}
-```
-
-```csharp
-builder.Services.AddMcpServer()
-    .WithTools<WeatherTools>()
-    .WithMcpApps();
-```
+[!code-csharp[](Apps.cs?name=snippet_AppsWithMcpApps)]
 
 The `WithMcpApps()` call registers a post-configuration step that processes all registered tools and applies `[McpAppUi]` attribute metadata to their `_meta.ui` field automatically.
 
@@ -64,48 +48,19 @@ The `WithMcpApps()` call registers a post-configuration step that processes all 
 
 If you create tools manually (without `WithMcpApps()`), you can still use the attribute and process tools explicitly:
 
-```csharp
-var tools = new[]
-{
-    McpServerTool.Create(typeof(WeatherTools).GetMethod(nameof(WeatherTools.GetWeather))!),
-    McpServerTool.Create(typeof(WeatherTools).GetMethod(nameof(WeatherTools.GetForecast))!),
-};
-
-McpApps.ApplyAppUiAttributes(tools);
-```
+[!code-csharp[](Apps.cs?name=snippet_AppsManualProcessing)]
 
 ### Using the programmatic API
 
 For full control, use `McpApps.SetAppUi` to set UI metadata directly:
 
-```csharp
-var tool = McpServerTool.Create((string location) => $"Weather for {location}");
-
-McpApps.SetAppUi(tool, new McpUiToolMeta
-{
-    ResourceUri = "ui://weather/view.html",
-    Visibility = [McpUiToolVisibility.Model, McpUiToolVisibility.App],
-});
-```
+[!code-csharp[](Apps.cs?name=snippet_AppsSetAppUi)]
 
 ## Checking client capabilities
 
 During a session, you can check whether the connected client supports MCP Apps:
 
-```csharp
-[McpServerTool, Description("Get weather")]
-[McpAppUi(ResourceUri = "ui://weather/view.html")]
-public static string GetWeather(McpServer server, string location)
-{
-    var uiCapability = McpApps.GetUiCapability(server.ClientCapabilities);
-    if (uiCapability is not null)
-    {
-        // Client supports MCP Apps — the UI will be displayed
-    }
-
-    return $"Weather for {location}";
-}
-```
+[!code-csharp[](Apps.cs?name=snippet_AppsCheckCapability)]
 
 ## Tool visibility
 
@@ -131,32 +86,13 @@ UI resources are HTML pages registered with the MCP server using the `ui://` URI
 Tools with `Visibility = [McpUiToolVisibility.App]` are not visible to the LLM — they are intended only for use by the app UI.
 This is useful for tools that serve UI interaction (button handlers, form submissions) without cluttering the model's tool list:
 
-```csharp
-[McpServerTool, Description("Submit the weather form")]
-[McpAppUi(ResourceUri = "ui://weather/view.html", Visibility = [McpUiToolVisibility.App])]
-public static string SubmitWeatherForm(string city) => GetWeatherHtml(city);
-```
+[!code-csharp[](Apps.cs?name=snippet_AppsAppOnly)]
 
 ## Graceful degradation
 
 Not all clients support MCP Apps. Use `GetUiCapability` to detect support and return text-only content as a fallback:
 
-```csharp
-[McpServerTool, Description("Get weather")]
-[McpAppUi(ResourceUri = "ui://weather/view.html")]
-public static string GetWeather(McpServer server, string location)
-{
-    var uiCapability = McpApps.GetUiCapability(server.ClientCapabilities);
-    if (uiCapability is null)
-    {
-        // Client doesn't support MCP Apps — return plain text
-        return $"Current weather for {location}: 72°F, sunny";
-    }
-
-    // Client supports MCP Apps — the UI resource will be displayed
-    return $"Weather data for {location} loaded into UI";
-}
-```
+[!code-csharp[](Apps.cs?name=snippet_AppsGracefulDegradation)]
 
 ## Display modes
 
@@ -185,7 +121,4 @@ The <xref:ModelContextProtocol.Extensions.Apps.McpApps> class provides constants
 
 MCP Apps types use source-generated JSON serialization for Native AOT compatibility. Use `McpApps.SerializerOptions` when serializing extension types:
 
-```csharp
-var json = JsonSerializer.Serialize(toolMeta, McpApps.SerializerOptions);
-var deserialized = JsonSerializer.Deserialize<McpUiToolMeta>(json, McpApps.SerializerOptions);
-```
+[!code-csharp[](Apps.cs?name=snippet_AppsSerialization)]

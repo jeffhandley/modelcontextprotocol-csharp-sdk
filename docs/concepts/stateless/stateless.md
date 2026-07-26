@@ -55,12 +55,7 @@ The era is cached per <xref:ModelContextProtocol.Client.IClientTransport> instan
 
 **Opting out of fallback.** Pin <xref:ModelContextProtocol.Client.McpClientOptions.ProtocolVersion> to `2026-07-28` when you want the client to refuse to fall back. A non-null `ProtocolVersion` is also treated as the minimum, so the connect call throws an <xref:ModelContextProtocol.McpException> instead of silently degrading to an initialize-capable revision. This is useful for strict `2026-07-28` production code and for tests that need to assert `2026-07-28`-only behavior. To try several versions yourself, leave `ProtocolVersion` unset (the default) or retry the connection with a different value.
 
-```csharp
-var clientOptions = new McpClientOptions
-{
-    ProtocolVersion = "2026-07-28",
-};
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessProtocolVersion)]
 
 ### Migrating from legacy SSE
 
@@ -88,20 +83,7 @@ Stateless mode is the recommended default for HTTP-based MCP servers. When enabl
 
 ### Enabling stateless mode
 
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        options.Stateless = true;
-    })
-    .WithTools<MyTools>();
-
-var app = builder.Build();
-app.MapMcp();
-app.Run();
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessEnabling)]
 
 ### What stateless mode changes
 
@@ -385,33 +367,7 @@ For transport-level options like reconnection intervals and transport mode, see 
 
 All session-related configuration is on <xref:ModelContextProtocol.AspNetCore.HttpServerTransportOptions>, configured via `WithHttpTransport`:
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        // Recommended for servers that don't need sessions.
-        options.Stateless = true;
-
-        // --- Options below only apply to stateful (non-stateless) mode ---
-
-        // How long a session can be idle before being closed (default: 2 hours)
-        options.IdleTimeout = TimeSpan.FromMinutes(30);
-
-        // Maximum number of idle sessions in memory (default: 10,000)
-        options.MaxIdleSessionCount = 1_000;
-
-        // Customize McpServerOptions per session with access to HttpContext
-        options.ConfigureSessionOptions = async (httpContext, mcpServerOptions, cancellationToken) =>
-        {
-            // Example: customize tools based on the authenticated user's roles
-            var user = httpContext.User;
-            if (user.IsInRole("admin"))
-            {
-                mcpServerOptions.ToolCollection = [.. adminTools];
-            }
-        };
-    });
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessConfigReference)]
 
 ### Property reference
 
@@ -434,18 +390,7 @@ The properties marked _Stateful only_ above carry diagnostic [`MCP9006`](xref:li
 
 In **stateful mode**, this callback runs once per session — when the client's initial `initialize` request creates the session.
 
-```csharp
-options.ConfigureSessionOptions = async (httpContext, mcpServerOptions, cancellationToken) =>
-{
-    // Filter available tools based on a route parameter
-    var category = httpContext.Request.RouteValues["category"]?.ToString() ?? "all";
-    mcpServerOptions.ToolCollection = GetToolsForCategory(category);
-
-    // Set server info based on the authenticated user
-    var userName = httpContext.User.Identity?.Name;
-    mcpServerOptions.ServerInfo = new() { Name = $"MCP Server ({userName})" };
-};
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessConfigureSession)]
 
 For a complete example that filters tools based on route parameters, see the [AspNetCoreMcpPerSessionTools](https://github.com/modelcontextprotocol/csharp-sdk/tree/main/samples/AspNetCoreMcpPerSessionTools) sample.
 
@@ -453,22 +398,7 @@ For a complete example that filters tools based on route parameters, see the [As
 
 In **stateless mode**, `ConfigureSessionOptions` is called on **every HTTP request** because each request creates a fresh server context. This makes it useful for per-request customization based on headers, authentication, or other request-specific data — similar to middleware:
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        options.Stateless = true;
-        options.ConfigureSessionOptions = (httpContext, mcpServerOptions, cancellationToken) =>
-        {
-            // This runs on every request in stateless mode, so you can use the
-            // current HttpContext to customize tools, prompts, or resources.
-            var apiVersion = httpContext.Request.Headers["X-Api-Version"].ToString();
-            mcpServerOptions.ToolCollection = GetToolsForVersion(apiVersion);
-            return Task.CompletedTask;
-        };
-    })
-    .WithTools<DefaultTools>();
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessPerRequest)]
 
 ### Security and user binding
 
@@ -519,20 +449,7 @@ The stdio transport creates a single server for the lifetime of the process. The
 
 When you create a server directly with <xref:ModelContextProtocol.Server.McpServer.Create*>, you control the `IServiceProvider` and transport yourself. If you pass an already-scoped provider, you can set <xref:ModelContextProtocol.Server.McpServerOptions.ScopeRequests> to `false` to avoid creating redundant nested scopes. The [InMemoryTransport sample](https://github.com/modelcontextprotocol/csharp-sdk/blob/51a4fde4d9cfa12ef9430deef7daeaac36625be8/samples/InMemoryTransport/Program.cs#L6-L14) shows a minimal example of using `McpServer.Create` with in-memory pipes:
 
-```csharp
-Pipe clientToServerPipe = new(), serverToClientPipe = new();
-
-await using var scope = serviceProvider.CreateAsyncScope();
-
-await using McpServer server = McpServer.Create(
-    new StreamServerTransport(clientToServerPipe.Reader.AsStream(), serverToClientPipe.Writer.AsStream()),
-    new McpServerOptions
-    {
-        ScopeRequests = false, // The scope is already managed externally.
-        ToolCollection = [McpServerTool.Create((string arg) => $"Echo: {arg}", new() { Name = "Echo" })]
-    },
-    serviceProvider: scope.ServiceProvider);
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessInMemory)]
 
 ### DI scope summary
 
@@ -697,24 +614,7 @@ Every request `Activity` is tagged with `mcp.session.id` — a unique identifier
 
 The transport session ID (<xref:ModelContextProtocol.McpSession.SessionId>, the `Mcp-Session-Id` header value) and the `mcp.session.id` activity tag are not automatically correlated by the SDK. You can bridge this gap by tagging the ASP.NET Core request `Activity` with the transport session ID using an [endpoint filter](https://learn.microsoft.com/aspnet/core/fundamentals/minimal-apis/min-api-filters) on `MapMcp()`:
 
-```csharp
-app.MapMcp().AddEndpointFilter(async (context, next) =>
-{
-    var httpContext = context.HttpContext;
-
-    // The session ID is available in the request header on all non-initialize requests
-    // in stateful mode (the client echoes back the ID it received from the server's
-    // initialize response). It is null for the first initialize request and always null
-    // in stateless mode. Tag before next() so child spans inherit the value.
-    string? sessionId = httpContext.Request.Headers["Mcp-Session-Id"];
-    if (sessionId != null)
-    {
-        Activity.Current?.AddTag("mcp.transport.session.id", sessionId);
-    }
-
-    return await next(context);
-});
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessEndpointFilter)]
 
 <!-- mlc-disable-next-line -->
 > [!NOTE]
@@ -773,21 +673,11 @@ This makes SSE sessions behave similarly to [stdio](#stdio-transport): the sessi
 
 For high-availability deployments, <xref:ModelContextProtocol.AspNetCore.ISessionMigrationHandler> enables session migration across server instances. When a request arrives with a session ID that isn't found locally, the handler is consulted to attempt migration.
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        // Session migration is a stateful-mode feature.
-        options.Stateless = false;
-        options.SessionMigrationHandler = new MySessionMigrationHandler();
-    });
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessSessionMigration)]
 
 You can also register the handler in DI:
 
-```csharp
-builder.Services.AddSingleton<ISessionMigrationHandler, MySessionMigrationHandler>();
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessMigrationDi)]
 
 Implementations should:
 
@@ -801,15 +691,7 @@ Session migration adds significant complexity. Consider whether stateless mode i
 
 The server can store SSE events for replay when clients reconnect using the `Last-Event-ID` header. Configure this with <xref:ModelContextProtocol.AspNetCore.HttpServerTransportOptions.EventStreamStore>:
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        // Session resumability is a stateful-mode feature.
-        options.Stateless = false;
-        options.EventStreamStore = new MyEventStreamStore();
-    });
-```
+[!code-csharp[](Stateless.cs?name=snippet_StatelessResumability)]
 
 When configured:
 

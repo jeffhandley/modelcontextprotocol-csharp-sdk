@@ -21,16 +21,7 @@ Use <xref:ModelContextProtocol.Client.StdioClientTransport> to launch a server p
 
 [NuGet MCP Server]: https://learn.microsoft.com/nuget/concepts/nuget-mcp-server
 
-```csharp
-var transport = new StdioClientTransport(new StdioClientTransportOptions
-{
-    Command = "dnx",
-    Arguments = ["NuGet.Mcp.Server"],
-    ShutdownTimeout = TimeSpan.FromSeconds(10)
-});
-
-await using var client = await McpClient.CreateAsync(transport);
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsStdioClient)]
 
 The following table describes the key <xref:ModelContextProtocol.Client.StdioClientTransportOptions> properties:
 
@@ -49,47 +40,15 @@ The following table describes the key <xref:ModelContextProtocol.Client.StdioCli
 
 By default, the server process inherits **all** environment variables from the current process. This includes credentials, tokens, proxy settings, and internal configuration that might be sensitive or irrelevant to the server. When running third-party or untrusted MCP servers, consider disabling inheritance to prevent unintentional credential leakage:
 
-```csharp
-var transport = new StdioClientTransport(new StdioClientTransportOptions
-{
-    Command = "my-mcp-server",
-    InheritEnvironmentVariables = false,
-    EnvironmentVariables = StdioClientTransportOptions.GetDefaultEnvironmentVariables(),
-});
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsStdioEnvDefault)]
 
 `GetDefaultEnvironmentVariables()` returns a curated set of environment variables (such as `PATH`, `HOME`, and standard system directories) that most child processes need to start correctly, without leaking credentials or other sensitive values from the parent process. The allowlist is aligned with the defaults used by the TypeScript and Python MCP SDKs. On Windows it also includes `PATHEXT`, which is required for the OS to recognize `.cmd` and `.bat` files as executable. You can add server-specific variables on top:
 
-```csharp
-var env = StdioClientTransportOptions.GetDefaultEnvironmentVariables();
-env["MY_SERVER_API_KEY"] = apiKey;
-
-var transport = new StdioClientTransport(new StdioClientTransportOptions
-{
-    Command = "my-mcp-server",
-    InheritEnvironmentVariables = false,
-    EnvironmentVariables = env,
-});
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsStdioEnvAdd)]
 
 If you need to selectively forward a specific set of variables from the parent environment rather than using the curated allowlist, build the dictionary manually:
 
-```csharp
-var env = new Dictionary<string, string?>();
-foreach (var name in new[] { "PATH", "HOME", "HTTP_PROXY", "HTTPS_PROXY" })
-{
-    var value = Environment.GetEnvironmentVariable(name);
-    if (value is not null)
-        env[name] = value;
-}
-
-var transport = new StdioClientTransport(new StdioClientTransportOptions
-{
-    Command = "my-mcp-server",
-    InheritEnvironmentVariables = false,
-    EnvironmentVariables = env,
-});
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsStdioEnvManual)]
 
 > [!WARNING]
 > **Security risk (inheriting):** Variables such as `AWS_SECRET_ACCESS_KEY`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, and similar credentials present in the parent process automatically flow into the child process unless inheritance is disabled. This can unintentionally expose sensitive values to third-party or untrusted MCP servers.
@@ -100,15 +59,7 @@ var transport = new StdioClientTransport(new StdioClientTransportOptions
 
 Use <xref:ModelContextProtocol.Server.StdioServerTransport> for servers that communicate over stdin/stdout:
 
-```csharp
-var builder = Host.CreateApplicationBuilder(args);
-
-builder.Services.AddMcpServer()
-    .WithStdioServerTransport()
-    .WithTools<MyTools>();
-
-await builder.Build().RunAsync();
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsStdioServer)]
 
 ### Streamable HTTP transport
 
@@ -120,68 +71,23 @@ The [Streamable HTTP] transport uses HTTP for bidirectional communication with o
 
 Use <xref:ModelContextProtocol.Client.HttpClientTransport> with <xref:ModelContextProtocol.Client.HttpTransportMode.StreamableHttp>:
 
-```csharp
-var transport = new HttpClientTransport(new HttpClientTransportOptions
-{
-    Endpoint = new Uri("https://my-mcp-server.example.com/mcp"),
-    TransportMode = HttpTransportMode.StreamableHttp,
-    ConnectionTimeout = TimeSpan.FromSeconds(30),
-    AdditionalHeaders = new Dictionary<string, string>
-    {
-        ["X-Custom-Header"] = "value"
-    }
-});
-
-await using var client = await McpClient.CreateAsync(transport);
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsHttpClient)]
 
 The client also supports automatic transport detection with <xref:ModelContextProtocol.Client.HttpTransportMode.AutoDetect> (the default), which tries Streamable HTTP first and falls back to SSE if the server does not support it:
 
-```csharp
-var transport = new HttpClientTransport(new HttpClientTransportOptions
-{
-    Endpoint = new Uri("https://my-mcp-server.example.com/mcp"),
-    // TransportMode defaults to AutoDetect
-});
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsHttpAutoDetect)]
 
 #### Resuming sessions
 
 Streamable HTTP supports session resumption. Save the session ID, server capabilities, and server info from the original session, then use <xref:ModelContextProtocol.Client.McpClient.ResumeSessionAsync*> to reconnect:
 
-```csharp
-var transport = new HttpClientTransport(new HttpClientTransportOptions
-{
-    Endpoint = new Uri("https://my-mcp-server.example.com/mcp"),
-    KnownSessionId = previousSessionId
-});
-
-await using var client = await McpClient.ResumeSessionAsync(transport, new ResumeClientSessionOptions
-{
-    ServerCapabilities = previousServerCapabilities,
-    ServerInfo = previousServerInfo
-});
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsResume)]
 
 #### Streamable HTTP server (ASP.NET Core)
 
 Use the `ModelContextProtocol.AspNetCore` package to host an MCP server over HTTP. The <xref:Microsoft.AspNetCore.Builder.McpEndpointRouteBuilderExtensions.MapMcp*> method maps the Streamable HTTP endpoint at the specified route (root by default).
 
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        // Recommended for servers that don't need server-to-client requests.
-        options.Stateless = true;
-    })
-    .WithTools<MyTools>();
-
-var app = builder.Build();
-app.MapMcp();
-app.Run();
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsHttpServer)]
 
 By default, the HTTP transport runs **statelessly** — the server does not assign an `Mcp-Session-Id` or track transport session state in memory. This simplifies deployment, enables horizontal scaling without session affinity, and matches the `2026-07-28` Streamable HTTP wire format. Set `Stateless = false` explicitly when your server needs stateful sessions for unsolicited notifications, resource subscriptions, or per-client isolation. For a detailed guide on when to use stateless vs. stateful mode, configure session options, and understand [cancellation and disposal](xref:stateless#cancellation-and-disposal) behavior during shutdown, see [Stateless and Stateful](xref:stateless).
 
@@ -221,26 +127,7 @@ _In the following sample, the MCP server will allow browser calls from `localhos
 }
 ```
 
-```csharp
-var allowedOrigins = builder.Configuration.GetSection("Mcp:AllowedOrigins").Get<string[]>() ?? ["http://localhost:5173"];
-
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("McpBrowserClient", policy =>
-    {
-        policy.WithOrigins(allowedOrigins)
-            // Add `GET` for standalone/resumable SSE streams and DELETE for stateful session termination.
-            .WithMethods("POST", "GET", "DELETE")
-            .WithHeaders("Content-Type", "Authorization", "MCP-Protocol-Version", "Mcp-Session-Id")
-            .WithExposedHeaders("Mcp-Session-Id");
-    });
-});
-
-var app = builder.Build();
-
-app.UseCors();
-app.MapMcp("/mcp").RequireCors("McpBrowserClient");
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsCors)]
 
 #### How messages flow
 
@@ -254,9 +141,7 @@ A custom route can be specified. For example, the [AspNetCoreMcpPerSessionTools]
 
 [AspNetCoreMcpPerSessionTools]: https://github.com/modelcontextprotocol/csharp-sdk/tree/main/samples/AspNetCoreMcpPerSessionTools
 
-```csharp
-app.MapMcp("/mcp");
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsCustomRoute)]
 
 When using a custom route, Streamable HTTP clients should connect directly to that route (for example, `https://host/mcp`), while SSE clients (when [legacy SSE is enabled](xref:stateless#legacy-sse-transport)) should connect to `{route}/sse` (for example, `https://host/mcp/sse`).
 
@@ -276,17 +161,7 @@ The [SSE (Server-Sent Events)] transport is a legacy mechanism that uses unidire
 
 Use <xref:ModelContextProtocol.Client.HttpClientTransport> with <xref:ModelContextProtocol.Client.HttpTransportMode.Sse>:
 
-```csharp
-var transport = new HttpClientTransport(new HttpClientTransportOptions
-{
-    Endpoint = new Uri("https://my-mcp-server.example.com/sse"),
-    TransportMode = HttpTransportMode.Sse,
-    MaxReconnectionAttempts = 5,
-    DefaultReconnectionInterval = TimeSpan.FromSeconds(1)
-});
-
-await using var client = await McpClient.CreateAsync(transport);
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsSseClient)]
 
 SSE-specific configuration options:
 
@@ -303,30 +178,7 @@ The ASP.NET Core integration supports SSE transport alongside Streamable HTTP. L
 
 To enable legacy SSE, set `EnableLegacySse` to `true`:
 
-```csharp
-var builder = WebApplication.CreateBuilder(args);
-
-builder.Services.AddMcpServer()
-    .WithHttpTransport(options =>
-    {
-        // SSE requires stateful mode (the default). Set explicitly for forward compatibility.
-        options.Stateless = false;
-
-#pragma warning disable MCP9004 // EnableLegacySse is obsolete
-        // Enable legacy SSE endpoints for clients that don't support Streamable HTTP.
-        // See sessions doc for backpressure implications.
-        options.EnableLegacySse = true;
-#pragma warning restore MCP9004
-    })
-    .WithTools<MyTools>();
-
-var app = builder.Build();
-
-// MapMcp() serves Streamable HTTP. Legacy SSE (/sse and /message) is also
-// available because EnableLegacySse is set to true above.
-app.MapMcp();
-app.Run();
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsSseServer)]
 
 See [Stateless and Stateful — Legacy SSE transport](xref:stateless#legacy-sse-transport) for details on SSE session lifetime and configuration.
 

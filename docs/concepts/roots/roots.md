@@ -28,55 +28,13 @@ Each root is represented by a <xref:ModelContextProtocol.Protocol.Root> with a U
 
 Clients advertise their support for roots in the capabilities sent during initialization. The roots capability is created automatically when a roots handler is provided. Configure the handler through <xref:ModelContextProtocol.Client.McpClientHandlers.RootsHandler>:
 
-```csharp
-var options = new McpClientOptions
-{
-    Handlers = new McpClientHandlers
-    {
-        RootsHandler = (request, cancellationToken) =>
-        {
-            return ValueTask.FromResult(new ListRootsResult
-            {
-                Roots =
-                [
-                    new Root
-                    {
-                        Uri = "file:///home/user/projects/my-app",
-                        Name = "My Application"
-                    },
-                    new Root
-                    {
-                        Uri = "file:///home/user/projects/shared-lib",
-                        Name = "Shared Library"
-                    }
-                ]
-            });
-        }
-    }
-};
-
-await using var client = await McpClient.CreateAsync(transport, options);
-```
+[!code-csharp[](Roots.cs?name=snippet_RootsHandler)]
 
 ### Requesting roots from the server
 
 Servers can request the client's root list using <xref:ModelContextProtocol.Server.McpServer.RequestRootsAsync*>. This is a server-to-client request, so it requires [stateful mode or stdio](xref:stateless) — it is not available in [stateless mode](xref:stateless#stateless-mode-recommended). For a stateless-compatible alternative, throw `InputRequiredException` from your handler through MRTR — see [Multi round-trip requests (MRTR)](#multi-round-trip-requests-mrtr).
 
-```csharp
-[McpServerTool, Description("Lists the user's project roots")]
-public static async Task<string> ListProjectRoots(McpServer server, CancellationToken cancellationToken)
-{
-    var result = await server.RequestRootsAsync(new ListRootsRequestParams(), cancellationToken);
-
-    var summary = new StringBuilder();
-    foreach (var root in result.Roots)
-    {
-        summary.AppendLine($"- {root.Name ?? root.Uri}: {root.Uri}");
-    }
-
-    return summary.ToString();
-}
-```
+[!code-csharp[](Roots.cs?name=snippet_RequestRoots)]
 
 ### Roots change notifications
 
@@ -86,26 +44,13 @@ When the set of roots changes (for example, the user opens a new project), the c
 
 Roots change notifications are automatically sent when the client's roots handler is updated. However, clients can also send the notification explicitly:
 
-```csharp
-await mcpClient.SendNotificationAsync(
-    NotificationMethods.RootsListChangedNotification,
-    new RootsListChangedNotificationParams());
-```
+[!code-csharp[](Roots.cs?name=snippet_RootsListChanged)]
 
 #### Handling change notifications on the server
 
 Servers can register a handler to respond when the client's roots change:
 
-```csharp
-server.RegisterNotificationHandler(
-    NotificationMethods.RootsListChangedNotification,
-    async (notification, cancellationToken) =>
-    {
-        // Re-request the roots list to get the updated set
-        var result = await server.RequestRootsAsync(new ListRootsRequestParams(), cancellationToken);
-        Console.WriteLine($"Roots updated. {result.Roots.Count} roots available.");
-    });
-```
+[!code-csharp[](Roots.cs?name=snippet_RootsChangeHandler)]
 
 ### Multi round-trip requests (MRTR)
 
@@ -116,33 +61,7 @@ server.RegisterNotificationHandler(
 
 For example:
 
-```csharp
-[McpServerTool, Description("Tool that requests roots via MRTR")]
-public static string ListRootsWithMrtr(
-    McpServer server,
-    RequestContext<CallToolRequestParams> context)
-{
-    // On retry, process the client's roots response
-    if (context.Params!.InputResponses?.TryGetValue("get_roots", out var response) is true)
-    {
-        var roots = response.Deserialize(InputResponse.ListRootsResultJsonTypeInfo)?.Roots ?? [];
-        return $"Found {roots.Count} roots: {string.Join(", ", roots.Select(r => r.Uri))}";
-    }
-
-    if (!server.IsMrtrSupported)
-    {
-        return "This tool requires MRTR support (2026-07-28, or a stateful session using protocol revision 2025-11-25).";
-    }
-
-    // First call — request the client's root list
-    throw new InputRequiredException(
-        inputRequests: new Dictionary<string, InputRequest>
-        {
-            ["get_roots"] = InputRequest.ForRootsList(new ListRootsRequestParams())
-        },
-        requestState: "awaiting-roots");
-}
-```
+[!code-csharp[](Roots.cs?name=snippet_RootsMrtr)]
 
 > [!TIP]
 > For the full protocol details, including load shedding, multiple round trips, and the compatibility matrix, see [Multi Round-Trip Requests (MRTR)](xref:mrtr).

@@ -23,20 +23,7 @@ When a `CancellationToken` passed to a client method (such as <xref:ModelContext
 
 Server tool methods receive a `CancellationToken` that is triggered when the client sends a cancellation notification. Pass this token through to any async operations so they stop promptly:
 
-```csharp
-[McpServerTool, Description("A long-running computation")]
-public static async Task<string> LongComputation(
-    [Description("Number of iterations")] int iterations,
-    CancellationToken cancellationToken)
-{
-    for (int i = 0; i < iterations; i++)
-    {
-        await Task.Delay(1000, cancellationToken);
-    }
-
-    return $"Completed {iterations} iterations.";
-}
-```
+[!code-csharp[](Cancellation.cs?name=snippet_LongComputation)]
 
 When the client sends a cancellation notification, the `OperationCanceledException` propagates back to the client as a cancellation response.
 
@@ -49,17 +36,4 @@ The cancellation notification includes:
 
 Cancellation notifications can be observed by registering a handler. For broader interception of notifications and other messages, you can add <xref:ModelContextProtocol.Server.McpMessageFilter> delegates to the <xref:ModelContextProtocol.Server.McpMessageFilters.IncomingFilters> collection in <xref:ModelContextProtocol.Server.McpServerOptions.Filters>.
 
-```csharp
-mcpClient.RegisterNotificationHandler(
-    NotificationMethods.CancelledNotification,
-    (notification, ct) =>
-    {
-        var cancelled = notification.Params?.Deserialize<CancelledNotificationParams>(
-            McpJsonUtilities.DefaultOptions);
-        if (cancelled is not null)
-        {
-            Console.WriteLine($"Request {cancelled.RequestId} cancelled: {cancelled.Reason}");
-        }
-        return default;
-    });
-```
+[!code-csharp[](Cancellation.cs?name=snippet_CancellationHandler)]

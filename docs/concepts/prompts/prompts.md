@@ -29,44 +29,17 @@ The attribute-based approach is the most common and is shown throughout this doc
 
 A prompt without arguments:
 
-```csharp
-[McpServerPromptType]
-public class MyPrompts
-{
-    [McpServerPrompt, Description("A simple greeting prompt")]
-    public static ChatMessage Greeting()
-        => new(ChatRole.User, "Hello! How can you help me today?");
-}
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsSimple)]
 
 #### Prompts with arguments
 
 Prompts can accept parameters to customize the generated messages. Use `[Description]` attributes to document each parameter. In addition to prompt arguments, methods can accept special parameter types that are resolved automatically: <xref:ModelContextProtocol.Server.McpServer>, `IProgress<ProgressNotificationValue>`, `ClaimsPrincipal`, and any service registered through dependency injection.
 
-```csharp
-[McpServerPromptType]
-public class CodePrompts
-{
-    [McpServerPrompt, Description("Generates a code review prompt")]
-    public static IEnumerable<ChatMessage> CodeReview(
-        [Description("The programming language")] string language,
-        [Description("The code to review")] string code) =>
-        [
-            new(ChatRole.User, $"Please review the following {language} code:\n\n```{language}\n{code}\n```"),
-            new(ChatRole.Assistant, "I'll review the code for correctness, style, and potential improvements.")
-        ];
-    }
-}
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsWithArgs)]
 
 Register prompt types when building the server:
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(o => o.Stateless = true)
-    .WithPrompts<MyPrompts>()
-    .WithPrompts<CodePrompts>();
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsRegister)]
 
 ### Rich content in prompts
 
@@ -76,69 +49,17 @@ Prompt messages can contain more than just text. For text and image content, use
 
 Include images in prompts using `DataContent`:
 
-```csharp
-[McpServerPrompt, Description("A prompt that includes an image for analysis")]
-public static IEnumerable<ChatMessage> AnalyzeImage(
-    [Description("Instructions for the analysis")] string instructions)
-{
-    byte[] imageBytes = LoadSampleImage();
-    return
-    [
-        new ChatMessage(ChatRole.User,
-        [
-            new TextContent($"Please analyze this image: {instructions}"),
-            new DataContent(imageBytes, "image/png")
-        ])
-    ];
-}
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsImage)]
 
 #### Embedded resources
 
 For protocol-specific content types like <xref:ModelContextProtocol.Protocol.EmbeddedResourceBlock>, use <xref:ModelContextProtocol.Protocol.PromptMessage> instead of `ChatMessage`. `PromptMessage` has a `Role` property and a single `Content` property of type <xref:ModelContextProtocol.Protocol.ContentBlock>:
 
-```csharp
-[McpServerPrompt, Description("A prompt that includes a document resource")]
-public static IEnumerable<PromptMessage> ReviewDocument(
-    [Description("The document ID to review")] string documentId)
-{
-    string content = LoadDocument(documentId); // application logic to load by ID
-    return
-    [
-        new PromptMessage
-        {
-            Role = Role.User,
-            Content = new TextContentBlock { Text = "Please review the following document:" }
-        },
-        new PromptMessage
-        {
-            Role = Role.User,
-            Content = new EmbeddedResourceBlock
-            {
-                Resource = new TextResourceContents
-                {
-                    Uri = $"docs://documents/{documentId}",
-                    MimeType = "text/plain",
-                    Text = content
-                }
-            }
-        }
-    ];
-}
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsEmbedded)]
 
 For binary resources, use the <xref:ModelContextProtocol.Protocol.BlobResourceContents.FromBytes*> factory method:
 
-```csharp
-new PromptMessage
-{
-    Role = Role.User,
-    Content = new EmbeddedResourceBlock
-    {
-        Resource = BlobResourceContents.FromBytes(pdfBytes, "data://report.pdf", "application/pdf")
-    }
-}
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsBlob)]
 
 ### Consuming prompts on the client
 
@@ -146,54 +67,11 @@ Clients can discover and use prompts through <xref:ModelContextProtocol.Client.M
 
 #### Listing prompts
 
-```csharp
-IList<McpClientPrompt> prompts = await client.ListPromptsAsync();
-
-foreach (var prompt in prompts)
-{
-    Console.WriteLine($"{prompt.Name}: {prompt.Description}");
-
-    // Show available arguments
-    if (prompt.ProtocolPrompt.Arguments is { Count: > 0 })
-    {
-        foreach (var arg in prompt.ProtocolPrompt.Arguments)
-        {
-            var required = arg.Required == true ? " (required)" : "";
-            Console.WriteLine($"  - {arg.Name}: {arg.Description}{required}");
-        }
-    }
-}
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsList)]
 
 #### Getting a prompt
 
-```csharp
-GetPromptResult result = await client.GetPromptAsync(
-    "code_review",
-    new Dictionary<string, object?>
-    {
-        ["language"] = "csharp",
-        ["code"] = "public static int Add(int a, int b) => a + b;"
-    });
-
-// Process the returned messages (PromptMessage has a single Content block)
-foreach (var message in result.Messages)
-{
-    Console.WriteLine($"[{message.Role}]:");
-    switch (message.Content)
-    {
-        case TextContentBlock text:
-            Console.WriteLine($"  {text.Text}");
-            break;
-        case ImageContentBlock image:
-            Console.WriteLine($"  [image] {image.MimeType}");
-            break;
-        case EmbeddedResourceBlock resource:
-            Console.WriteLine($"  Resource: {resource.Resource.Uri}");
-            break;
-    }
-}
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsGet)]
 
 ### Prompt list change notifications
 
@@ -201,21 +79,8 @@ Servers can dynamically add, remove, or modify prompts at runtime and notify con
 
 #### Sending notifications from the server
 
-```csharp
-// After adding or removing prompts dynamically
-await server.SendNotificationAsync(
-    NotificationMethods.PromptListChangedNotification,
-    new PromptListChangedNotificationParams());
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsNotify)]
 
 #### Handling notifications on the client
 
-```csharp
-mcpClient.RegisterNotificationHandler(
-    NotificationMethods.PromptListChangedNotification,
-    async (notification, cancellationToken) =>
-    {
-        var updatedPrompts = await mcpClient.ListPromptsAsync(cancellationToken: cancellationToken);
-        Console.WriteLine($"Prompt list updated. {updatedPrompts.Count} prompts available.");
-    });
-```
+[!code-csharp[](Prompts.cs?name=snippet_PromptsHandle)]

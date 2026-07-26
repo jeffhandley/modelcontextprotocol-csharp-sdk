@@ -24,75 +24,19 @@ Two levels of API are provided for paginated operations:
 
 The convenience methods on <xref:ModelContextProtocol.Client.McpClient> handle pagination automatically, fetching all pages and returning the complete list:
 
-```csharp
-// Fetches all tools, handling pagination automatically
-IList<McpClientTool> allTools = await client.ListToolsAsync();
-
-// Fetches all resources, handling pagination automatically
-IList<McpClientResource> allResources = await client.ListResourcesAsync();
-
-// Fetches all prompts, handling pagination automatically
-IList<McpClientPrompt> allPrompts = await client.ListPromptsAsync();
-
-// Fetches all resource templates, handling pagination automatically
-IList<McpClientResourceTemplate> allTemplates = await client.ListResourceTemplatesAsync();
-```
+[!code-csharp[](Pagination.cs?name=snippet_AutomaticPagination)]
 
 ### Manual pagination
 
 For more control, use the raw methods that accept request parameters and return paginated results. This is useful for processing results page by page or limiting the number of results retrieved:
 
-```csharp
-string? cursor = null;
-
-do
-{
-    var result = await client.ListToolsAsync(new ListToolsRequestParams
-    {
-        Cursor = cursor
-    });
-
-    // Process this page of results
-    foreach (var tool in result.Tools)
-    {
-        Console.WriteLine($"{tool.Name}: {tool.Description}");
-    }
-
-    // Get the cursor for the next page (null when no more pages)
-    cursor = result.NextCursor;
-
-} while (cursor is not null);
-```
+[!code-csharp[](Pagination.cs?name=snippet_ManualPagination)]
 
 ### Pagination on the server
 
 When implementing custom list handlers on the server, pagination is supported by examining the `Cursor` property of the request parameters and returning a `NextCursor` in the result:
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(o => o.Stateless = true)
-    .WithListResourcesHandler(async (ctx, ct) =>
-    {
-        const int pageSize = 10;
-        int startIndex = 0;
-
-        // Parse cursor to determine starting position
-        if (ctx.Params.Cursor is { } cursor)
-        {
-            startIndex = int.Parse(cursor);
-        }
-
-        var allResources = GetAllResources();
-        var page = allResources.Skip(startIndex).Take(pageSize).ToList();
-        var hasMore = startIndex + pageSize < allResources.Count;
-
-        return new ListResourcesResult
-        {
-            Resources = page,
-            NextCursor = hasMore ? (startIndex + pageSize).ToString() : null
-        };
-    });
-```
+[!code-csharp[](Pagination.cs?name=snippet_ServerPagination)]
 
 <!-- mlc-disable-next-line -->
 > [!NOTE]

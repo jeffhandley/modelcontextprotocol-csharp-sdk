@@ -39,39 +39,7 @@ For enum types, the SDK supports several schema formats:
 Each schema type supports a `Default` property that specifies a pre-populated value for the form field.
 Clients should use defaults to pre-fill form fields, making it easier for users to accept common values or see expected input formats.
 
-```csharp
-var result = await server.ElicitAsync(new ElicitRequestParams
-{
-    Message = "Configure your preferences",
-    RequestedSchema = new ElicitRequestParams.RequestSchema
-    {
-        Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>
-        {
-            ["name"] = new ElicitRequestParams.StringSchema
-            {
-                Description = "Your display name",
-                Default = "User"
-            },
-            ["maxResults"] = new ElicitRequestParams.NumberSchema
-            {
-                Description = "Maximum number of results",
-                Default = 25
-            },
-            ["enableNotifications"] = new ElicitRequestParams.BooleanSchema
-            {
-                Description = "Enable push notifications",
-                Default = true
-            },
-            ["theme"] = new ElicitRequestParams.UntitledSingleSelectEnumSchema
-            {
-                Description = "UI theme",
-                Enum = ["light", "dark", "system"],
-                Default = "system"
-            }
-        }
-    }
-}, cancellationToken);
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationDefaults)]
 
 #### Enum schema formats
 
@@ -82,31 +50,7 @@ Enum schemas allow the server to present a set of choices to the user.
 - <xref:ModelContextProtocol.Protocol.ElicitRequestParams.UntitledMultiSelectEnumSchema>: Multi-select allowing multiple values.
 - <xref:ModelContextProtocol.Protocol.ElicitRequestParams.TitledMultiSelectEnumSchema>: Multi-select with display titles.
 
-```csharp
-// Titled single-select: display titles differ from values
-["priority"] = new ElicitRequestParams.TitledSingleSelectEnumSchema
-{
-    Description = "Task priority",
-    OneOf =
-    [
-        new() { Const = "p0", Title = "Critical (P0)" },
-        new() { Const = "p1", Title = "High (P1)" },
-        new() { Const = "p2", Title = "Normal (P2)" },
-    ],
-    Default = "p2"
-},
-
-// Multi-select: user can select multiple values
-["tags"] = new ElicitRequestParams.UntitledMultiSelectEnumSchema
-{
-    Description = "Tags to apply",
-    Items = new()
-    {
-        Enum = ["bug", "feature", "docs", "test"]
-    },
-    Default = ["bug"]
-}
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationEnumFormats)]
 
 The server can request a single input or multiple inputs at once.
 To help distinguish multiple inputs, each input has a unique name.
@@ -121,18 +65,7 @@ For URL mode elicitation, the server provides a URL that the user must visit to 
 
 To request a URL mode interaction, set the `Mode` to "url" and provide a `Url` and `ElicitationId` in the `ElicitRequestParams`.
 
-```csharp
-var elicitationId = Guid.NewGuid().ToString();
-var result = await server.ElicitAsync(
-    new ElicitRequestParams
-    {
-        Mode = "url",
-        ElicitationId = elicitationId,
-        Url = $"https://auth.example.com/oauth/authorize?state={elicitationId}",
-        Message = "Please authorize access to your account by logging in through your browser."
-    },
-    cancellationToken);
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationUrlMode)]
 
 ### Client support for elicitation
 
@@ -140,23 +73,7 @@ Clients declare their support for elicitation in their capabilities as part of t
 
 In the MCP C# SDK, this is done by configuring the capabilities and an <xref:ModelContextProtocol.Client.McpClientHandlers.ElicitationHandler> in the <xref:ModelContextProtocol.Client.McpClientOptions>:
 
-```csharp
-var options = new McpClientOptions
-{
-    Capabilities = new ClientCapabilities
-    {
-        Elicitation = new ElicitationCapability
-        {
-            Form = new FormElicitationCapability(),
-            Url = new UrlElicitationCapability()
-        }
-    },
-    Handlers = new McpClientHandlers
-    {
-        ElicitationHandler = HandleElicitationAsync
-    }
-};
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationClientOptions)]
 
 The `ElicitationHandler` is an asynchronous method that's called when the server requests additional information. The handler should check the `Mode` of the request:
 
@@ -179,48 +96,7 @@ Here's an example implementation of how a console application might handle elici
 
 For example:
 
-```csharp
-[McpServerTool, Description("Tool that elicits via MRTR")]
-public static string ElicitWithMrtr(
-    McpServer server,
-    RequestContext<CallToolRequestParams> context)
-{
-    // On retry, process the client's elicitation response
-    if (context.Params!.InputResponses?.TryGetValue("user_input", out var response) is true)
-    {
-        var elicitResult = response.Deserialize(InputResponse.ElicitResultJsonTypeInfo);
-        return elicitResult?.Action == "accept"
-            ? $"User accepted: {elicitResult.Content?.FirstOrDefault().Value}"
-            : "User declined.";
-    }
-
-    if (!server.IsMrtrSupported)
-    {
-        return "This tool requires MRTR support (2026-07-28, or a stateful session using protocol revision 2025-11-25).";
-    }
-
-    // First call — request user input
-    throw new InputRequiredException(
-        inputRequests: new Dictionary<string, InputRequest>
-        {
-            ["user_input"] = InputRequest.ForElicitation(new ElicitRequestParams
-            {
-                Message = "Please confirm the action",
-                RequestedSchema = new()
-                {
-                    Properties = new Dictionary<string, ElicitRequestParams.PrimitiveSchemaDefinition>
-                    {
-                        ["confirm"] = new ElicitRequestParams.BooleanSchema
-                        {
-                            Description = "Confirm the action"
-                        }
-                    }
-                }
-            })
-        },
-        requestState: "awaiting-confirmation");
-}
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationMrtr)]
 
 > [!TIP]
 > For the full protocol details, including multiple round trips, concurrent input requests, and the compatibility matrix, see [Multi Round-Trip Requests (MRTR)](xref:mrtr).
@@ -233,37 +109,7 @@ When a tool cannot proceed without first completing a URL-mode elicitation (for 
 
 A server tool can throw `UrlElicitationRequiredException` when it detects that authorization or other out-of-band interaction is required:
 
-```csharp
-[McpServerTool, Description("A tool that requires third-party authorization")]
-public async Task<string> AccessThirdPartyResource(McpServer server, CancellationToken token)
-{
-    // Check if we already have valid credentials for this user
-    // (In a real app, you'd check stored tokens based on user identity)
-    bool hasValidCredentials = false;
-
-    if (!hasValidCredentials)
-    {
-        // Generate a unique elicitation ID for tracking
-        var elicitationId = Guid.NewGuid().ToString();
-
-        // Throw the exception to signal the client needs to complete URL elicitation
-        throw new UrlElicitationRequiredException(
-            "Authorization is required to access the third-party service.",
-            [
-                new ElicitRequestParams
-                {
-                    Mode = "url",
-                    ElicitationId = elicitationId,
-                    Url = $"https://auth.example.com/connect?elicitationId={elicitationId}",
-                    Message = "Please authorize access to your Example Co account."
-                }
-            ]);
-    }
-
-    // Proceed with the authorized operation
-    return "Successfully accessed the resource!";
-}
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationUrlRequiredServer)]
 
 The exception can include multiple elicitations if the operation requires authorization from multiple services.
 
@@ -276,66 +122,13 @@ When the client calls a tool and receives a `UrlElicitationRequiredException`, i
 3. Optionally wait for completion notifications from the server.
 4. Retry the original request after the user completes the out-of-band interactions.
 
-```csharp
-try
-{
-    var result = await client.CallToolAsync("AccessThirdPartyResource");
-    Console.WriteLine($"Tool succeeded: {result.Content[0]}");
-}
-catch (UrlElicitationRequiredException ex)
-{
-    Console.WriteLine($"Authorization required: {ex.Message}");
-
-    // Process each required elicitation
-    foreach (var elicitation in ex.Elicitations)
-    {
-        Console.WriteLine($"\nServer requests URL interaction:");
-        Console.WriteLine($"  Message: {elicitation.Message}");
-        Console.WriteLine($"  URL: {elicitation.Url}");
-        Console.WriteLine($"  Elicitation ID: {elicitation.ElicitationId}");
-
-        // Show security warning and get user consent
-        Console.Write("\nDo you want to open this URL? (y/n): ");
-        var consent = Console.ReadLine();
-
-        if (consent?.ToLower() == "y")
-        {
-            // Open the URL in the system browser
-            Process.Start(new ProcessStartInfo(elicitation.Url!) { UseShellExecute = true });
-
-            Console.WriteLine("Waiting for you to complete the interaction in your browser...");
-            // Optionally listen for notifications/elicitation/complete notification
-        }
-    }
-
-    // After user completes the out-of-band interaction, retry the tool call
-    Console.Write("\nPress Enter to retry the tool call...");
-    Console.ReadLine();
-
-    var retryResult = await client.CallToolAsync("AccessThirdPartyResource");
-    Console.WriteLine($"Tool succeeded on retry: {retryResult.Content[0]}");
-}
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationUrlRequiredClient)]
 
 #### Listening for elicitation completion notifications
 
 Servers can optionally send a `notifications/elicitation/complete` notification when the out-of-band interaction is complete. Clients can register a handler to receive these notifications:
 
-```csharp
-await using var completionHandler = client.RegisterNotificationHandler(
-    NotificationMethods.ElicitationCompleteNotification,
-    async (notification, cancellationToken) =>
-    {
-        var payload = notification.Params?.Deserialize<ElicitationCompleteNotificationParams>(
-            McpJsonUtilities.DefaultOptions);
-
-        if (payload is not null)
-        {
-            Console.WriteLine($"Elicitation {payload.ElicitationId} completed!");
-            // Signal that the client can now retry the original request
-        }
-    });
-```
+[!code-csharp[](Elicitation.cs?name=snippet_ElicitationCompleteHandler)]
 
 This pattern is particularly useful for:
 

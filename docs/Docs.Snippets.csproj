@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Docs.Snippets hosts the C# code that documentation pages transclude via DocFX
+    [!code-csharp[](File.cs?name=snippet_X)] includes. Building it as part of the solution
+    compile-gates every code sample shown in docs/ (Debug + Release, warnings as errors).
+
+    Each snippet file lives next to the Markdown page it backs (for example,
+    concepts/tools/Tools.cs beside concepts/tools/tools.md), so includes are simple
+    same-directory references. This project sits at the docs/ root and picks up every
+    such file through the SDK's default recursive .cs globbing — adding a new snippet
+    file needs no edit here. Snippet regions are marked with // <snippet_X> ... </snippet_X>.
+
+    The Compile Remove below excludes the runnable concept samples under */samples/,
+    which are standalone projects with their own entry points; they are built by their
+    own .csproj files, not compiled into this library.
+
+    Targets net8.0 — the minimum framework the SDK supports — so the documented samples
+    are validated against the compatibility floor. If a snippet needs an API that only
+    exists on a newer runtime, that is a documentation bug worth surfacing here.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputType>Library</OutputType>
+    <IsPackable>false</IsPackable>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+  </PropertyGroup>
+
+  <!-- The runnable concept samples under */samples/ are standalone projects; exclude
+       their sources (and generated obj/bin files) from this library's default globbing. -->
+  <ItemGroup>
+    <Compile Remove="**/samples/**/*.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../src/ModelContextProtocol.AspNetCore/ModelContextProtocol.AspNetCore.csproj" />
+    <ProjectReference Include="../src/ModelContextProtocol.Extensions.Tasks/ModelContextProtocol.Extensions.Tasks.csproj" />
+    <ProjectReference Include="../src/ModelContextProtocol.Extensions.Apps/ModelContextProtocol.Extensions.Apps.csproj" />
+  </ItemGroup>
+
+</Project>

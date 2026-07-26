@@ -24,62 +24,7 @@ The server returns a <xref:ModelContextProtocol.Protocol.Completion> object cont
 
 Register a completion handler when building the server. The handler receives a reference (prompt or resource template) and the current argument value:
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(o => o.Stateless = true)
-    .WithPrompts<MyPrompts>()
-    .WithResources<MyResources>()
-    .WithCompleteHandler(async (ctx, ct) =>
-    {
-        if (ctx.Params is not { } @params)
-            throw new McpProtocolException("Params are required.", McpErrorCode.InvalidParams);
-
-        var argument = @params.Argument;
-
-        // Handle prompt argument completions
-        if (@params.Ref is PromptReference promptRef)
-        {
-            var suggestions = argument.Name switch
-            {
-                "language" => new[] { "csharp", "python", "javascript", "typescript", "go", "rust" },
-                "style" => new[] { "casual", "formal", "technical", "friendly" },
-                _ => Array.Empty<string>()
-            };
-
-            // Filter suggestions based on what the user has typed so far
-            var filtered = suggestions.Where(s => s.StartsWith(argument.Value, StringComparison.OrdinalIgnoreCase)).ToList();
-
-            return new CompleteResult
-            {
-                Completion = new Completion
-                {
-                    Values = filtered,
-                    Total = filtered.Count,
-                    HasMore = false
-                }
-            };
-        }
-
-        // Handle resource template argument completions
-        if (@params.Ref is ResourceTemplateReference resourceRef)
-        {
-            var availableIds = new[] { "1", "2", "3", "4", "5" };
-            var filtered = availableIds.Where(id => id.StartsWith(argument.Value)).ToList();
-
-            return new CompleteResult
-            {
-                Completion = new Completion
-                {
-                    Values = filtered,
-                    Total = filtered.Count,
-                    HasMore = false
-                }
-            };
-        }
-
-        return new CompleteResult();
-    });
-```
+[!code-csharp[](Completions.cs?name=snippet_CompletionHandler)]
 
 ### Automatic completions with AllowedValuesAttribute
 
@@ -87,33 +32,11 @@ For parameters with a known set of valid values, you can use `System.ComponentMo
 
 #### Prompt parameters
 
-```csharp
-[McpServerPromptType]
-public class MyPrompts
-{
-    [McpServerPrompt, Description("Generates a code review prompt")]
-    public static ChatMessage CodeReview(
-        [Description("The programming language")]
-        [AllowedValues("csharp", "python", "javascript", "typescript", "go", "rust")]
-        string language,
-        [Description("The code to review")] string code)
-        => new(ChatRole.User, $"Please review the following {language} code:\n\n```{language}\n{code}\n```");
-}
-```
+[!code-csharp[](Completions.cs?name=snippet_AllowedValuesPrompt)]
 
 #### Resource template parameters
 
-```csharp
-[McpServerResourceType]
-public class MyResources
-{
-    [McpServerResource("config://settings/{section}"), Description("Reads a configuration section")]
-    public static string ReadConfig(
-        [AllowedValues("general", "network", "security", "logging")]
-        string section)
-        => GetConfig(section);
-}
-```
+[!code-csharp[](Completions.cs?name=snippet_AllowedValuesResource)]
 
 With these attributes in place, when a client sends a `completion/complete` request for the `language` or `section` argument, the server automatically filters and returns matching values based on what the user has typed so far. This approach can be combined with a custom completion handler registered via `WithCompleteHandler`; the handler's results are returned first, followed by any matching `AllowedValues`.
 
@@ -123,36 +46,8 @@ Clients request completions using <xref:ModelContextProtocol.Client.McpClient.Co
 
 #### Prompt argument completions
 
-```csharp
-// Get completions for a prompt argument
-CompleteResult result = await client.CompleteAsync(
-    new PromptReference { Name = "code_review" },
-    argumentName: "language",
-    argumentValue: "type");
-
-// result.Completion.Values might contain: ["typescript"]
-foreach (var suggestion in result.Completion.Values)
-{
-    Console.WriteLine($"  {suggestion}");
-}
-
-if (result.Completion.HasMore == true)
-{
-    Console.WriteLine($"  ... and more ({result.Completion.Total} total)");
-}
-```
+[!code-csharp[](Completions.cs?name=snippet_ClientPromptCompletion)]
 
 #### Resource-template argument completions
 
-```csharp
-// Get completions for a resource template argument
-CompleteResult result = await client.CompleteAsync(
-    new ResourceTemplateReference { Uri = "file:///{path}" },
-    argumentName: "path",
-    argumentValue: "src/");
-
-foreach (var suggestion in result.Completion.Values)
-{
-    Console.WriteLine($"  {suggestion}");
-}
-```
+[!code-csharp[](Completions.cs?name=snippet_ClientResourceCompletion)]

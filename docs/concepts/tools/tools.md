@@ -25,23 +25,11 @@ Tools can be defined in several ways:
 
 The attribute-based approach is the most common and is shown throughout this document. Parameters are automatically deserialized from JSON and documented using `[Description]` attributes. In addition to tool arguments, methods can accept special parameter types that are resolved automatically: <xref:ModelContextProtocol.Server.McpServer>, `IProgress<ProgressNotificationValue>`, `ClaimsPrincipal`, and any service registered through dependency injection.
 
-```csharp
-[McpServerToolType]
-public class MyTools
-{
-    [McpServerTool, Description("Echoes the input message back")]
-    public static string Echo([Description("The message to echo")] string message)
-        => $"Echo: {message}";
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_MyTools)]
 
 Register the tool type when building the server:
 
-```csharp
-builder.Services.AddMcpServer()
-    .WithHttpTransport(o => o.Stateless = true)
-    .WithTools<MyTools>();
-```
+[!code-csharp[](Tools.cs?name=snippet_RegisterTools)]
 
 ### Content types
 
@@ -51,38 +39,21 @@ Tools can return various content types. The simplest is a `string`, which is aut
 
 Return a `string` or a <xref:ModelContextProtocol.Protocol.TextContentBlock> directly:
 
-```csharp
-[McpServerTool, Description("Returns a greeting")]
-public static string Greet(string name) => $"Hello, {name}!";
-```
+[!code-csharp[](Tools.cs?name=snippet_Greet)]
 
 #### Image content
 
 Return an <xref:ModelContextProtocol.Protocol.ImageContentBlock> with base64-encoded image data and a MIME type.
 Use the <xref:ModelContextProtocol.Protocol.ImageContentBlock.FromBytes*> factory method or construct the block directly:
 
-```csharp
-[McpServerTool, Description("Returns a generated image")]
-public static ImageContentBlock GenerateImage()
-{
-    byte[] pngBytes = CreateImage(); // your image generation logic
-    return ImageContentBlock.FromBytes(pngBytes, "image/png");
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_GenerateImage)]
 
 #### Audio content
 
 Return an <xref:ModelContextProtocol.Protocol.AudioContentBlock> with base64-encoded audio data and a MIME type.
 The <xref:ModelContextProtocol.Protocol.AudioContentBlock.FromBytes*> factory method encodes the raw bytes automatically:
 
-```csharp
-[McpServerTool, Description("Returns a synthesized audio clip")]
-public static AudioContentBlock Synthesize(string text)
-{
-    byte[] wavBytes = TextToSpeech(text); // your audio synthesis logic
-    return AudioContentBlock.FromBytes(wavBytes, "audio/wav");
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_Synthesize)]
 
 Supported audio MIME types include `audio/wav`, `audio/mp3`, `audio/ogg`, and others depending on what the client can handle.
 
@@ -91,109 +62,29 @@ Supported audio MIME types include `audio/wav`, `audio/mp3`, `audio/ogg`, and ot
 Return an <xref:ModelContextProtocol.Protocol.EmbeddedResourceBlock> to embed a resource directly in a tool result.
 The resource can contain either text or binary data through <xref:ModelContextProtocol.Protocol.TextResourceContents> or <xref:ModelContextProtocol.Protocol.BlobResourceContents>:
 
-```csharp
-[McpServerTool, Description("Returns a document as an embedded resource")]
-public static EmbeddedResourceBlock GetDocument()
-{
-    return new EmbeddedResourceBlock
-    {
-        Resource = new TextResourceContents
-        {
-            Uri = "docs://readme",
-            MimeType = "text/plain",
-            Text = "This is the document content."
-        }
-    };
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_GetDocument)]
 
 For binary resources, use <xref:ModelContextProtocol.Protocol.BlobResourceContents>:
 
-```csharp
-[McpServerTool, Description("Returns a binary resource")]
-public static EmbeddedResourceBlock GetBinaryData(string id)
-{
-    byte[] data = LoadData(id); // application logic to load data by ID
-    return new EmbeddedResourceBlock
-    {
-        Resource = BlobResourceContents.FromBytes(data, $"data://items/{id}", "application/octet-stream")
-    };
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_GetBinaryData)]
 
 #### Mixed content
 
 Tools can return multiple content blocks by returning `IEnumerable<ContentBlock>`:
 
-```csharp
-[McpServerTool, Description("Returns text and an image")]
-public static IEnumerable<ContentBlock> DescribeImage()
-{
-    byte[] imageBytes = GetImage();
-    return
-    [
-        new TextContentBlock { Text = "Here is the generated image:" },
-        ImageContentBlock.FromBytes(imageBytes, "image/png"),
-        new TextContentBlock { Text = "The image shows a landscape." }
-    ];
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_DescribeImage)]
 
 #### Content annotations
 
 Any content block can include <xref:ModelContextProtocol.Protocol.Annotations> to provide hints about the intended audience and priority:
 
-```csharp
-new TextContentBlock
-{
-    Text = "Detailed debug information",
-    Annotations = new Annotations
-    {
-        Audience = [Role.Assistant], // Only for the LLM, not the user
-        Priority = 0.3f             // Low priority (0.0 to 1.0)
-    }
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_Annotations)]
 
 ### Consuming tools on the client
 
 Clients can discover and call tools using <xref:ModelContextProtocol.Client.McpClient>:
 
-```csharp
-// List available tools
-IList<McpClientTool> tools = await client.ListToolsAsync();
-
-foreach (var tool in tools)
-{
-    Console.WriteLine($"{tool.Name}: {tool.Description}");
-}
-
-// Call a tool by finding it in the list
-McpClientTool echoTool = tools.First(t => t.Name == "echo");
-CallToolResult result = await echoTool.CallAsync(
-    new Dictionary<string, object?> { ["message"] = "Hello!" });
-
-// Process the result content blocks
-foreach (var content in result.Content)
-{
-    switch (content)
-    {
-        case TextContentBlock text:
-            Console.WriteLine(text.Text);
-            break;
-        case ImageContentBlock image:
-            File.WriteAllBytes("output.png", image.DecodedData.ToArray());
-            break;
-        case AudioContentBlock audio:
-            File.WriteAllBytes("output.wav", audio.DecodedData.ToArray());
-            break;
-        case EmbeddedResourceBlock resource:
-            if (resource.Resource is TextResourceContents textResource)
-                Console.WriteLine(textResource.Text);
-            break;
-    }
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_ConsumeTools)]
 
 ### Error handling
 
@@ -208,57 +99,19 @@ When a tool method throws an exception, the server catches it and returns a `Cal
 
 For all other exceptions, the error is returned as a tool result. If the exception derives from <xref:ModelContextProtocol.McpException> (excluding `McpProtocolException`, which is re-thrown above), its message is included in the error text; otherwise, a generic message is returned to avoid leaking internal details.
 
-```csharp
-[McpServerTool, Description("Divides two numbers")]
-public static double Divide(double a, double b)
-{
-    if (b == 0)
-    {
-        // ArgumentException is not an McpException, so the client receives a generic message:
-        // "An error occurred invoking 'divide'."
-        throw new ArgumentException("Cannot divide by zero");
-    }
-
-    return a / b;
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_Divide)]
 
 #### Protocol errors
 
 Throw <xref:ModelContextProtocol.McpProtocolException> to signal a protocol-level error (for example, invalid parameters or unknown tool). These exceptions propagate as JSON-RPC error responses rather than tool error results:
 
-```csharp
-[McpServerTool, Description("Processes the input")]
-public static string Process(string input)
-{
-    if (string.IsNullOrEmpty(input))
-    {
-        // Propagates as a JSON-RPC error with code -32602 (InvalidParams)
-        // and message "Missing required input"
-        throw new McpProtocolException("Missing required input", McpErrorCode.InvalidParams);
-    }
-
-    return $"Processed: {input}";
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_Process)]
 
 #### Checking for errors on the client
 
 On the client side, inspect the <xref:ModelContextProtocol.Protocol.CallToolResult.IsError> property after calling a tool:
 
-```csharp
-CallToolResult result = await client.CallToolAsync("divide", new Dictionary<string, object?>
-{
-    ["a"] = 10,
-    ["b"] = 0
-});
-
-if (result.IsError is true)
-{
-    // Prints: "Tool error: An error occurred invoking 'divide'."
-    Console.WriteLine($"Tool error: {result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text}");
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_CheckErrors)]
 
 ### Tool list change notifications
 
@@ -268,27 +121,13 @@ Servers can dynamically add, remove, or modify tools at runtime. When the tool l
 
 Inject <xref:ModelContextProtocol.Server.McpServer> and call the notification method after modifying the tool list:
 
-```csharp
-// After adding or removing tools dynamically
-await server.SendNotificationAsync(
-    NotificationMethods.ToolListChangedNotification,
-    new ToolListChangedNotificationParams());
-```
+[!code-csharp[](Tools.cs?name=snippet_SendToolListChanged)]
 
 #### Handling notifications on the client
 
 Register a notification handler on the client to respond to tool list changes:
 
-```csharp
-mcpClient.RegisterNotificationHandler(
-    NotificationMethods.ToolListChangedNotification,
-    async (notification, cancellationToken) =>
-    {
-        // Refresh the tool list
-        var updatedTools = await mcpClient.ListToolsAsync(cancellationToken: cancellationToken);
-        Console.WriteLine($"Tool list updated. {updatedTools.Count} tools available.");
-    });
-```
+[!code-csharp[](Tools.cs?name=snippet_HandleToolListChanged)]
 
 ### JSON Schema generation
 
@@ -306,30 +145,13 @@ Tool parameters are described using [JSON Schema 2020-12]. JSON schemas are auto
 
 Use `[Description]` attributes on parameters to populate the `description` field in the generated schema. This helps LLMs understand what each parameter expects.
 
-```csharp
-[McpServerTool, Description("Searches for items")]
-public static string Search(
-    [Description("The search query string")] string query,
-    [Description("Maximum results to return (1-100)")] int maxResults = 10)
-{
-    // Schema will include descriptions and default value for maxResults
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_Search)]
 
 ### Custom HTTP headers from tool parameters
 
 When using the Streamable HTTP transport, tool parameters can be mirrored as HTTP headers so that network infrastructure (load balancers, proxies, gateways) can make routing decisions without parsing the JSON-RPC request body. Apply the <xref:ModelContextProtocol.Server.McpHeaderAttribute> to a parameter to opt it in:
 
-```csharp
-[McpServerTool, Description("Executes a SQL query in a specific region")]
-public static string ExecuteSql(
-    [McpHeader("Region"), Description("Target datacenter region")] string region,
-    [Description("The SQL query to execute")] string query)
-{
-    // Clients will send an additional HTTP header:
-    //   Mcp-Param-Region: <region value>
-}
-```
+[!code-csharp[](Tools.cs?name=snippet_ExecuteSql)]
 
 When the tool's schema is generated, the annotated parameter includes an `x-mcp-header` extension property. Clients read this annotation and automatically add the corresponding `Mcp-Param-{Name}` header on outgoing `tools/call` requests. The server validates that the header value matches the value in the JSON-RPC body.
 
@@ -345,45 +167,12 @@ Rules and constraints:
 
 By default, `Mcp-Param-*` headers are sent only for tools discovered via <xref:ModelContextProtocol.Client.McpClient.ListToolsAsync*>. If a client already has tool schema information (for example, from a previous session, hardcoded configuration, or an out-of-band source), it can pre-load those definitions so that headers are sent immediately—without a round trip to the server.
 
-```csharp
-// Build the tool definition with x-mcp-header annotations
-var tool = new Tool
-{
-    Name = "execute_sql",
-    InputSchema = JsonDocument.Parse("""
-        {
-            "type": "object",
-            "properties": {
-                "region": {
-                    "type": "string",
-                    "x-mcp-header": "Region"
-                },
-                "query": {
-                    "type": "string"
-                }
-            }
-        }
-        """).RootElement.Clone(),
-};
-
-// Pre-load the tool definition — no ListToolsAsync needed
-client.AddKnownTools([tool]);
-
-// This call now sends an Mcp-Param-Region header automatically
-var result = await client.CallToolAsync("execute_sql",
-    new Dictionary<string, object?> { ["region"] = "us-west-2", ["query"] = "SELECT 1" });
-```
+[!code-csharp[](Tools.cs?name=snippet_PreloadKnownTools)]
 
 Known tools survive <xref:ModelContextProtocol.Client.McpClient.ListToolsAsync*> cache clears—they remain in the cache even when the server's tool list is refreshed. If the server returns a tool with the same name, the server's definition overwrites the cached one, but the tool keeps its known status.
 
 To remove known tools, use <xref:ModelContextProtocol.Client.McpClient.RemoveKnownTools*> for specific tools or <xref:ModelContextProtocol.Client.McpClient.ClearKnownTools*> to remove all:
 
-```csharp
-// Remove specific known tools by name
-client.RemoveKnownTools(["execute_sql"]);
-
-// Or remove all known tools at once
-client.ClearKnownTools();
-```
+[!code-csharp[](Tools.cs?name=snippet_RemoveKnownTools)]
 
 All tools passed to <xref:ModelContextProtocol.Client.McpClient.AddKnownTools*> are validated for correct `x-mcp-header` annotations. If any tool in the batch fails validation, an <xref:System.ArgumentException> is thrown and no tools are added (all-or-nothing).

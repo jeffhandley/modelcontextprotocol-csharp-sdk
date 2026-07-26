@@ -28,33 +28,11 @@ This means you can access the authenticated user's identity at every stage of re
 
 The simplest and recommended approach is to declare a `ClaimsPrincipal` parameter on your tool method. The SDK automatically injects the authenticated user without including it in the tool's input schema:
 
-```csharp
-[McpServerToolType]
-public class UserAwareTools
-{
-    [McpServerTool, Description("Returns a personalized greeting.")]
-    public string Greet(ClaimsPrincipal? user, string message)
-    {
-        var userName = user?.Identity?.Name ?? "anonymous";
-        return $"{userName}: {message}";
-    }
-}
-```
+[!code-csharp[](Identity.cs?name=snippet_IdentityDirectInjection)]
 
 This pattern works the same way for prompts and resources:
 
-```csharp
-[McpServerPromptType]
-public class UserAwarePrompts
-{
-    [McpServerPrompt, Description("Creates a user-specific prompt.")]
-    public ChatMessage PersonalizedPrompt(ClaimsPrincipal? user, string topic)
-    {
-        var userName = user?.Identity?.Name ?? "user";
-        return new(ChatRole.User, $"As {userName}, explain {topic}.");
-    }
-}
-```
+[!code-csharp[](Identity.cs?name=snippet_IdentityPrompt)]
 
 ### Why this works
 
@@ -70,62 +48,17 @@ This behavior is transport-agnostic. For HTTP transports, the `ClaimsPrincipal` 
 
 Both message filters and request-specific filters expose the user via `context.User`:
 
-```csharp
-services.AddMcpServer()
-    .WithRequestFilters(requestFilters =>
-    {
-        requestFilters.AddCallToolFilter(next => async (context, cancellationToken) =>
-        {
-            // Access user identity in a filter
-            var userName = context.User?.Identity?.Name;
-            var logger = context.Services?.GetService<ILogger<Program>>();
-            logger?.LogInformation("Tool called by: {User}", userName ?? "anonymous");
-
-            return await next(context, cancellationToken);
-        });
-    })
-    .WithTools<UserAwareTools>();
-```
+[!code-csharp[](Identity.cs?name=snippet_IdentityRequestFilter)]
 
 ## Role-based access with `[Authorize]` attributes
 
 For declarative authorization, you can use standard ASP.NET Core `[Authorize]` attributes on your tools, prompts, and resources. This requires calling `AddAuthorizationFilters()` during server configuration:
 
-```csharp
-services.AddMcpServer()
-    .WithHttpTransport()
-    .AddAuthorizationFilters()
-    .WithTools<RoleProtectedTools>();
-```
+[!code-csharp[](Identity.cs?name=snippet_IdentityAuthzSetup)]
 
 Then decorate your tools with role requirements:
 
-```csharp
-[McpServerToolType]
-public class RoleProtectedTools
-{
-    [McpServerTool, Description("Available to all authenticated users.")]
-    [Authorize]
-    public string GetData(string query)
-    {
-        return $"Data for: {query}";
-    }
-
-    [McpServerTool, Description("Admin-only operation.")]
-    [Authorize(Roles = "Admin")]
-    public string AdminOperation(string action)
-    {
-        return $"Admin action: {action}";
-    }
-
-    [McpServerTool, Description("Public tool accessible without authentication.")]
-    [AllowAnonymous]
-    public string PublicInfo()
-    {
-        return "This is public information.";
-    }
-}
-```
+[!code-csharp[](Identity.cs?name=snippet_IdentityRoleProtected)]
 
 When authorization fails, the SDK automatically:
 
@@ -138,20 +71,7 @@ For more details on authorization filters and their execution order, see [Filter
 
 If you need access to the full `HttpContext` (not just the user), you can inject `IHttpContextAccessor` into your tool class. This gives you access to HTTP headers, query strings, and other request metadata:
 
-```csharp
-[McpServerToolType]
-public class HttpContextTools(IHttpContextAccessor contextAccessor)
-{
-    [McpServerTool, Description("Returns data filtered by caller identity.")]
-    public string GetFilteredData(string query)
-    {
-        var httpContext = contextAccessor.HttpContext
-            ?? throw new InvalidOperationException("No HTTP context available.");
-        var userName = httpContext.User.Identity?.Name ?? "anonymous";
-        return $"{userName}: results for '{query}'";
-    }
-}
-```
+[!code-csharp[](Identity.cs?name=snippet_IdentityHttpContext)]
 
 > [!IMPORTANT]
 > `IHttpContextAccessor` only works with HTTP transports. For transport-agnostic identity access, use `ClaimsPrincipal` parameter injection instead.
@@ -170,23 +90,7 @@ For more details, including important caveats about stale `HttpContext` with the
 
 For stdio-based servers where the caller's identity comes from the process environment rather than HTTP authentication, you can set the user in a message filter:
 
-```csharp
-services.AddMcpServer()
-    .WithMessageFilters(messageFilters =>
-    {
-        messageFilters.AddIncomingFilter(next => async (context, cancellationToken) =>
-        {
-            // Set user based on process-level context
-            var role = Environment.GetEnvironmentVariable("MCP_USER_ROLE") ?? "default";
-            context.User = new ClaimsPrincipal(new ClaimsIdentity(
-                [new Claim(ClaimTypes.Name, "stdio-user"), new Claim(ClaimTypes.Role, role)],
-                "StdioAuth", ClaimTypes.Name, ClaimTypes.Role));
-
-            await next(context, cancellationToken);
-        });
-    })
-    .WithTools<UserAwareTools>();
-```
+[!code-csharp[](Identity.cs?name=snippet_IdentityStdioFilter)]
 
 ## Full example: protected HTTP server
 

@@ -25,11 +25,7 @@ Add the diagnostic ID to `<NoWarn>` in your project file:
 
 Use `#pragma warning disable` around specific call sites:
 
-```csharp
-#pragma warning disable MCPEXP002 // RunSessionHandler is experimental and may change.
-options.RunSessionHandler = static (_, _, _) => Task.CompletedTask;
-#pragma warning restore MCPEXP002
-```
+[!code-csharp[](Experimental.cs?name=snippet_PerCallSuppression)]
 
 For a full list of experimental diagnostic IDs and their descriptions, see the [list of diagnostics](list-of-diagnostics.md#experimental-apis).
 
@@ -48,18 +44,7 @@ This means that switching between reflection-based and source-generated serializ
 
 If you define your own `JsonSerializerContext` that includes MCP protocol types, configure a `TypeInfoResolverChain` so the SDK's resolver handles MCP types:
 
-```csharp
-using ModelContextProtocol;
-
-JsonSerializerOptions options = new()
-{
-    TypeInfoResolverChain =
-    {
-        McpJsonUtilities.DefaultOptions.TypeInfoResolver!,
-        MyCustomContext.Default,
-    }
-};
-```
+[!code-csharp[](Experimental.cs?name=snippet_TypeInfoResolverChain)]
 
 By placing the SDK's resolver first, MCP types are serialized using the SDK's contract (which includes experimental properties), while your custom context handles your own types. This is recommended even if you aren't currently using experimental APIs, since it ensures your serialization configuration remains correct as new experimental properties are introduced or as you adopt experimental features in the future.
 

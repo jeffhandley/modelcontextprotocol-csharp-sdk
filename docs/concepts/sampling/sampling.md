@@ -28,49 +28,11 @@ MCP [sampling] allows servers to request LLM completions from the client. This e
 
 To get an <xref:Microsoft.Extensions.AI.IChatClient> that sends requests through the connected client, inject <xref:ModelContextProtocol.Server.McpServer> into a tool method and use the <xref:ModelContextProtocol.Server.McpServer.AsSamplingChatClient*> extension method:
 
-```csharp
-[McpServerTool(Name = "SummarizeContent"), Description("Summarizes the given text")]
-public static async Task<string> Summarize(
-    McpServer server,
-    [Description("The text to summarize")] string text,
-    CancellationToken cancellationToken)
-{
-    ChatMessage[] messages =
-    [
-        new(ChatRole.User, "Briefly summarize the following content:"),
-        new(ChatRole.User, text),
-    ];
-
-    ChatOptions options = new()
-    {
-        MaxOutputTokens = 256,
-        Temperature = 0.3f,
-    };
-
-    return $"Summary: {await server.AsSamplingChatClient().GetResponseAsync(messages, options, cancellationToken)}";
-}
-```
+[!code-csharp[](Sampling.cs?name=snippet_AsSamplingChatClient)]
 
 Alternatively, use <xref:ModelContextProtocol.Server.McpServer.SampleAsync*> directly for lower-level control:
 
-```csharp
-CreateMessageResult result = await server.SampleAsync(
-    new CreateMessageRequestParams
-    {
-        Messages =
-        [
-            new SamplingMessage
-            {
-                Role = Role.User,
-                Content = [new TextContentBlock { Text = "What is 2 + 2?" }]
-            }
-        ],
-        MaxTokens = 100,
-    },
-    cancellationToken);
-
-string response = result.Content.OfType<TextContentBlock>().FirstOrDefault()?.Text ?? string.Empty;
-```
+[!code-csharp[](Sampling.cs?name=snippet_SampleAsync)]
 
 ### Client: handling sampling requests
 
@@ -98,27 +60,7 @@ await using var client = await McpClient.CreateAsync(transport, options);
 
 For full control, provide a custom delegate:
 
-```csharp
-McpClientOptions options = new()
-{
-    Handlers = new()
-    {
-        SamplingHandler = async (request, progress, cancellationToken) =>
-        {
-            // Forward to your LLM, apply content filtering, etc.
-            string prompt = request?.Messages?.LastOrDefault()?.Content
-                .OfType<TextContentBlock>().FirstOrDefault()?.Text ?? string.Empty;
-
-            return new CreateMessageResult
-            {
-                Model = "my-model",
-                Role = Role.Assistant,
-                Content = [new TextContentBlock { Text = $"Response to: {prompt}" }]
-            };
-        }
-    }
-};
-```
+[!code-csharp[](Sampling.cs?name=snippet_CustomSamplingHandler)]
 
 ### Capability negotiation
 
@@ -133,45 +75,7 @@ Sampling requires the client to advertise the `sampling` capability. This is han
 
 For example:
 
-```csharp
-[McpServerTool, Description("Tool that samples via MRTR")]
-public static string SampleWithMrtr(
-    McpServer server,
-    RequestContext<CallToolRequestParams> context)
-{
-    // On retry, process the client's sampling response
-    if (context.Params!.InputResponses?.TryGetValue("llm_call", out var response) is true)
-    {
-        var text = response.Deserialize(InputResponse.CreateMessageResultJsonTypeInfo)?.Content
-            .OfType<TextContentBlock>().FirstOrDefault()?.Text;
-        return $"LLM said: {text}";
-    }
-
-    if (!server.IsMrtrSupported)
-    {
-        return "This tool requires MRTR support (2026-07-28, or a stateful session using protocol revision 2025-11-25).";
-    }
-
-    // First call — request LLM completion from the client
-    throw new InputRequiredException(
-        inputRequests: new Dictionary<string, InputRequest>
-        {
-            ["llm_call"] = InputRequest.ForSampling(new CreateMessageRequestParams
-            {
-                Messages =
-                [
-                    new SamplingMessage
-                    {
-                        Role = Role.User,
-                        Content = [new TextContentBlock { Text = "Summarize the data" }]
-                    }
-                ],
-                MaxTokens = 256
-            })
-        },
-        requestState: "awaiting-sample");
-}
-```
+[!code-csharp[](Sampling.cs?name=snippet_SamplingMrtr)]
 
 > [!TIP]
 > For the full protocol details, including load shedding, multiple round trips, and the compatibility matrix, see [Multi Round-Trip Requests (MRTR)](xref:mrtr).

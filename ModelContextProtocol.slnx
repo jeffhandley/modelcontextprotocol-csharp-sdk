@@ -9,7 +9,9 @@
     <File Path=".github/workflows/markdown-link-check.yml" />
     <File Path=".github/workflows/release.yml" />
   </Folder>
-  <Folder Name="/docs/" />
+  <Folder Name="/docs/">
+    <Project Path="docs/Docs.Snippets.csproj" />
+  </Folder>
   <Folder Name="/docs/concepts/" />
   <Folder Name="/docs/concepts/elicitation/" />
   <Folder Name="/docs/concepts/elicitation/samples/" />
