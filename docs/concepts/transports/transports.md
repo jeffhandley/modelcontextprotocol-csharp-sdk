@@ -205,32 +205,7 @@ The <xref:ModelContextProtocol.Server.StreamServerTransport> and <xref:ModelCont
 
 The following example creates a client and server connected via `System.IO.Pipelines` (from the [InMemoryTransport sample](https://github.com/modelcontextprotocol/csharp-sdk/blob/51a4fde4d9cfa12ef9430deef7daeaac36625be8/samples/InMemoryTransport/Program.cs)):
 
-```csharp
-using ModelContextProtocol.Client;
-using ModelContextProtocol.Protocol;
-using ModelContextProtocol.Server;
-using System.IO.Pipelines;
-
-Pipe clientToServerPipe = new(), serverToClientPipe = new();
-
-// Create a server using a stream-based transport over an in-memory pipe.
-await using McpServer server = McpServer.Create(
-    new StreamServerTransport(clientToServerPipe.Reader.AsStream(), serverToClientPipe.Writer.AsStream()),
-    new McpServerOptions
-    {
-        ToolCollection = [McpServerTool.Create((string message) => $"Echo: {message}", new() { Name = "echo" })]
-    });
-_ = server.RunAsync();
-
-// Connect a client using a stream-based transport over the same in-memory pipe.
-await using McpClient client = await McpClient.CreateAsync(
-    new StreamClientTransport(clientToServerPipe.Writer.AsStream(), serverToClientPipe.Reader.AsStream()));
-
-// List and invoke tools.
-var tools = await client.ListToolsAsync();
-var echo = tools.First(t => t.Name == "echo");
-Console.WriteLine(await echo.InvokeAsync(new() { ["arg"] = "Hello World" }));
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsInMemory)]
 
 Like [stdio](#stdio-transport), the in-memory transport is inherently single-session — there is no `Mcp-Session-Id` header, and server-to-client requests (sampling, elicitation, roots) work naturally over the bidirectional pipe. This makes it ideal for testing servers that depend on these features. For information about how session behavior varies across transports, see [Stateless and Stateful](xref:stateless).
 
@@ -245,31 +220,6 @@ The flow consists of two steps:
 
 ### Usage
 
-```csharp
-using ModelContextProtocol.Authentication;
-
-// The caller owns the HttpClient lifetime.
-var httpClient = new HttpClient();
-
-var provider = new IdentityAssertionGrantProvider(
-    new IdentityAssertionGrantProviderOptions
-    {
-        ClientId = "mcp-client-id",
-        IdpTokenEndpoint = "https://company.okta.com/oauth2/token",
-        IdpClientId = "idp-client-id",
-        IdTokenCallback = (context, cancellationToken) =>
-            // Fetch a fresh ID token from your SSO session.
-            mySsoClient.GetIdTokenAsync(cancellationToken)
-    },
-    httpClient);
-
-var tokens = await provider.GetAccessTokenAsync(
-    resourceUrl: new Uri("https://mcp-server.example.com"),
-    authorizationServerUrl: new Uri("https://auth.mcp-server.example.com"),
-    cancellationToken: ct);
-
-// Use tokens.AccessToken to authenticate against the MCP server.
-// Call provider.InvalidateCache() to force a fresh token exchange on the next call.
-```
+[!code-csharp[](Transports.cs?name=snippet_TransportsIdentityAssertion)]
 
 The provider caches the resulting access token and reuses it until it expires. To force re-authentication (for example, after a 401 response), call `provider.InvalidateCache()` before retrying.

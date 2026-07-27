@@ -5,9 +5,11 @@ using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using ModelContextProtocol.Authentication;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using System.IO.Pipelines;
 
 namespace Docs.Snippets.Transports;
 
@@ -235,5 +237,67 @@ internal static class TransportsSnippets
         app.MapMcp();
         app.Run();
         // </snippet_TransportsSseServer>
+    }
+
+    public static async Task InMemory()
+    {
+        // <snippet_TransportsInMemory>
+        Pipe clientToServerPipe = new(), serverToClientPipe = new();
+
+        // Create a server using a stream-based transport over an in-memory pipe.
+        await using McpServer server = McpServer.Create(
+            new StreamServerTransport(clientToServerPipe.Reader.AsStream(), serverToClientPipe.Writer.AsStream()),
+            new McpServerOptions
+            {
+                ToolCollection = [McpServerTool.Create((string message) => $"Echo: {message}", new() { Name = "echo" })]
+            });
+        _ = server.RunAsync();
+
+        // Connect a client using a stream-based transport over the same in-memory pipe.
+        await using McpClient client = await McpClient.CreateAsync(
+            new StreamClientTransport(clientToServerPipe.Writer.AsStream(), serverToClientPipe.Reader.AsStream()));
+
+        // List and invoke tools.
+        var tools = await client.ListToolsAsync();
+        var echo = tools.First(t => t.Name == "echo");
+        Console.WriteLine(await echo.InvokeAsync(new() { ["arg"] = "Hello World" }));
+        // </snippet_TransportsInMemory>
+    }
+
+    public static async Task IdentityAssertion(CancellationToken ct)
+    {
+        var mySsoClient = new MySsoClient();
+
+        // <snippet_TransportsIdentityAssertion>
+        // The caller owns the HttpClient lifetime.
+        var httpClient = new HttpClient();
+
+        var provider = new IdentityAssertionGrantProvider(
+            new IdentityAssertionGrantProviderOptions
+            {
+                ClientId = "mcp-client-id",
+                IdpTokenEndpoint = "https://company.okta.com/oauth2/token",
+                IdpClientId = "idp-client-id",
+                IdTokenCallback = (context, cancellationToken) =>
+                    // Fetch a fresh ID token from your SSO session.
+                    mySsoClient.GetIdTokenAsync(cancellationToken)
+            },
+            httpClient);
+
+        var tokens = await provider.GetAccessTokenAsync(
+            resourceUrl: new Uri("https://mcp-server.example.com"),
+            authorizationServerUrl: new Uri("https://auth.mcp-server.example.com"),
+            cancellationToken: ct);
+
+        // Use tokens.AccessToken to authenticate against the MCP server.
+        // Call provider.InvalidateCache() to force a fresh token exchange on the next call.
+        // </snippet_TransportsIdentityAssertion>
+
+        _ = tokens;
+    }
+
+    private sealed class MySsoClient
+    {
+        public Task<string> GetIdTokenAsync(CancellationToken cancellationToken) => Task.FromResult("id-token");
     }
 }
