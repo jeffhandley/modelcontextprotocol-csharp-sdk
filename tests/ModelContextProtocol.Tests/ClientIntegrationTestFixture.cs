@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Tests.Utils;
 using System.Runtime.InteropServices;
 
 namespace ModelContextProtocol.Tests;
@@ -15,13 +16,10 @@ public class ClientIntegrationTestFixture
 
     public ClientIntegrationTestFixture()
     {
-        const string ServerEverythingVersion = "2026.1.26";
-
         EverythingServerTransportOptions = new()
         {
-            Command = "npx",
-            // Change to Arguments = ["mcp-server-everything"] if you want to run the server locally after creating a symlink
-            Arguments = ["-y", "--verbose", $"@modelcontextprotocol/server-everything@{ServerEverythingVersion}"],
+            Command = "node",
+            Arguments = [NodeHelpers.GetTestServerScriptPath("everything")],
             Name = "Everything",
         };
 
@@ -33,7 +31,6 @@ public class ClientIntegrationTestFixture
 
         if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
         {
-            // Change to Arguments to "mcp-server-everything" if you want to run the server locally after creating a symlink
             TestServerTransportOptions.Arguments = [PlatformDetection.IsMonoRuntime ? "TestServer.exe" : "TestServer.dll"];
         }
     }
